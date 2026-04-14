@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Parch Repository Manager
+Comment=Manage repositories and mirrors for Parch Linux
+Exec=mirrorman
+Icon=network-server-symbolic
+Terminal=false
+Type=Application
+Categories=System;Settings;
+StartupNotify=true

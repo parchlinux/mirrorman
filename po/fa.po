@@ -1,0 +1,377 @@
+# Persian translations for MirrorMan.
+# Copyright (C) 2026 Parch GNU/Linux Team
+msgid ""
+msgstr ""
+"Project-Id-Version: MirrorMan 0.2\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-04-15\n"
+"PO-Revision-Date: 2026-04-15\n"
+"Last-Translator: Parch Team\n"
+"Language-Team: Persian\n"
+"Language: fa\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Parch Repository Manager"
+msgstr "مدیریت مخازن پارچ"
+
+msgid "Refresh Mirrors"
+msgstr "تازه‌سازی آینه‌ها"
+
+msgid "Pacman Settings"
+msgstr "تنظیمات پکمن"
+
+msgid "About"
+msgstr "درباره"
+
+msgid "Mirror Filters"
+msgstr "پالایه‌های آینه"
+
+msgid "Configure mirror selection criteria"
+msgstr "پیکربندی معیارهای گزینش آینه"
+
+msgid "Country"
+msgstr "کشور"
+
+msgid "Worldwide"
+msgstr "جهانی"
+
+msgid "Protocol"
+msgstr "پروتکل"
+
+msgid "HTTP"
+msgstr "اچ‌تی‌تی‌پی"
+
+msgid "HTTPS"
+msgstr "اچ‌تی‌تی‌پی‌اس"
+
+msgid "IP Version"
+msgstr "نسخه IP"
+
+msgid "IPv4"
+msgstr "آی‌پی۴"
+
+msgid "IPv6"
+msgstr "آی‌پی۶"
+
+msgid "Up-to-date only"
+msgstr "فقط به‌روز"
+
+msgid "Show only synchronized mirrors"
+msgstr "نمایش فقط آینه‌های همگام‌شده"
+
+msgid "Fetch"
+msgstr "واکشی"
+
+msgid "Test & Rank"
+msgstr "آزمون و رتبه‌بندی"
+
+msgid "Repositories"
+msgstr "مخازن"
+
+msgid "Enable or disable repositories"
+msgstr "فعال یا غیرفعال کردن مخازن"
+
+msgid "Third-Party Repositories"
+msgstr "مخازن شخص ثالث"
+
+msgid "Enable or disable additional repositories"
+msgstr "فعال یا غیرفعال کردن مخازن اضافی"
+
+msgid "core"
+msgstr "اصلی"
+
+msgid "extra"
+msgstr "افزودنی"
+
+msgid "multilib"
+msgstr "چندمعماری"
+
+msgid "chaotic-aur"
+msgstr "آئور آشوبناک"
+
+msgid "blackarch"
+msgstr "مشکی‌تاق"
+
+msgid "archlinuxcn"
+msgstr "آرچ‌لینوکس‌سی‌ان"
+
+msgid "Sync"
+msgstr "همگام‌سازی"
+
+msgid "Save mirrorlist and sync repositories"
+msgstr "ذخیره فهرست آینه و همگام‌سازی مخازن"
+
+msgid "Update"
+msgstr "به‌روزرسانی"
+
+msgid "Update all system packages"
+msgstr "به‌روزرسانی همه بسته‌های سیستم"
+
+msgid "Enable"
+msgstr "فعال"
+
+msgid "Enable selected mirror"
+msgstr "فعال کردن آینه گزیده‌شده"
+
+msgid "Disable"
+msgstr "غیرفعال"
+
+msgid "Disable selected mirror"
+msgstr "غیرفعال کردن آینه گزیده‌شده"
+
+msgid "Sort by:"
+msgstr "مرتب‌سازی بر اساس:"
+
+msgid "Speed"
+msgstr "سرعت"
+
+msgid "Sort mirrors by response time"
+msgstr "مرتب‌سازی آینه‌ها بر اساس زمان پاسخ"
+
+msgid "Sort mirrors by country"
+msgstr "مرتب‌سازی آینه‌ها بر اساس کشور"
+
+msgid "Sort mirrors by last sync time"
+msgstr "مرتب‌سازی آینه‌ها بر اساس زمان آخرین همگام‌سازی"
+
+msgid "Age"
+msgstr "سن"
+
+msgid "Iran Blackout"
+msgstr "اینترنت داخلی"
+
+msgid "Add Iranian mirrors"
+msgstr "افزودن آینه‌های ایرانی"
+
+msgid "No Mirrors Loaded"
+msgstr "هیچ آینه‌ای بارگیری نشده"
+
+msgid "Configure your filters and click 'Fetch' to load available mirrors"
+msgstr "پالایه‌ها را پیکربندی کنید و 'واکشی' را بزنید تا آینه‌های موجود بارگیری شوند"
+
+msgid "Config Update Failed"
+msgstr "به‌روزرسانی پیکربندی ناموفق بود"
+
+msgid "No Protocols"
+msgstr "پروتکلی انتخاب نشده"
+
+msgid "Select at least one protocol"
+msgstr "حداقل یک پروتکل را انتخاب کنید"
+
+msgid "No IP Versions"
+msgstr "نسخه IP ای انتخاب نشده"
+
+msgid "Select at least one IP version"
+msgstr "حداقل یک نسخه IP را انتخاب کنید"
+
+msgid "Fetching mirrors..."
+msgstr "واکشی آینه‌ها..."
+
+msgid "Success"
+msgstr "موفق"
+
+msgid "Fetch Failed"
+msgstr "واکشی ناموفق بود"
+
+msgid "Ranking Complete"
+msgstr "رتبه‌بندی تکمیل شد"
+
+msgid "Mirrors sorted by speed."
+msgstr "آینه‌ها بر اساس سرعت مرتب شدند."
+
+msgid "Enable/disable mirrors, then use 'Sync' to save changes."
+msgstr "آینه‌ها را فعال/غیرفعال کنید، سپس 'همگام‌سازی' را برای ذخیره تغییرات بزنید."
+
+msgid "Ranking Error"
+msgstr "خطای رتبه‌بندی"
+
+msgid "Enabled"
+msgstr "فعال شد"
+
+msgid "Disabled"
+msgstr "غیرفعال شد"
+
+msgid "Syncing..."
+msgstr "همگام‌سازی..."
+
+msgid "Mirrorlist saved and repositories synced successfully"
+msgstr "فهرست آینه ذخیره و مخازن همگام‌سازی شدند"
+
+msgid "Sync Failed"
+msgstr "همگام‌سازی ناموفق بود"
+
+msgid "Update System?"
+msgstr "به‌روزرسانی سیستم؟"
+
+msgid "This will update all system packages. This operation may take some time. Continue?"
+msgstr "این کار همه بسته‌های سیستم را به‌روزرسانی می‌کند. این عملیات ممکن است زمان ببرد. ادامه می‌دهید؟"
+
+msgid "Cancel"
+msgstr "لغو"
+
+msgid "Enable Failed"
+msgstr "فعال‌سازی ناموفق بود"
+
+msgid "Iran Blackout Added"
+msgstr "آینه‌های اینترنت داخلی افزوده شد"
+
+msgid "Error: No display environment detected."
+msgstr "خطا: محیط نمایش تشخیص داده نشد."
+
+msgid "Ensure you are running with 'sudo -E'."
+msgstr "اطمینان حاصل کنید که با 'sudo -E' اجرا می‌کنید."
+
+msgid "Error: Failed to initialize GTK."
+msgstr "خطا: راه‌اندازی GTK ناموفق بود."
+
+msgid "Pacman Options"
+msgstr "گزینه‌های پکمن"
+
+msgid "Save"
+msgstr "ذخیره"
+
+msgid "Package Management"
+msgstr "مدیریت بسته"
+
+msgid "IgnorePkg"
+msgstr "نادیده‌گیری بسته"
+
+msgid "Space-separated packages to ignore during upgrades"
+msgstr "بسته‌هایی که در ارتقا نادیده گرفته شوند (با فاصله)"
+
+msgid "HoldPkg"
+msgstr "نگه‌داشتن بسته"
+
+msgid "Space-separated packages to hold during upgrades"
+msgstr "بسته‌هایی که در ارتقا ثابت بمانند (با فاصله)"
+
+msgid "NoUpgrade"
+msgstr "محافظت از فایل"
+
+msgid "Space-separated files to protect from upgrade"
+msgstr "فایل‌هایی که از ارتقا محافظت شوند (با فاصله)"
+
+msgid "NoExtract"
+msgstr "استخراج نشود"
+
+msgid "Space-separated files to skip during extraction"
+msgstr "فایل‌هایی که استخراج نشوند (با فاصله)"
+
+msgid "SyncFirst"
+msgstr "همگام‌سازی اول"
+
+msgid "Space-separated packages to sync first"
+msgstr "بسته‌هایی که اول همگام‌سازی شوند (با فاصله)"
+
+msgid "CheckSpace"
+msgstr "بررسی فضا"
+
+msgid "Check for sufficient disk space before installing"
+msgstr "بررسی فضای کافی دیسک قبل از نصب"
+
+msgid "ILoveCandy"
+msgstr "نوار آب‌نباتی"
+
+msgid "Display a candy cane progress bar"
+msgstr "نمایش نوار پیشرفت به سبک آب‌نباتی"
+
+msgid "ParallelDownloads"
+msgstr "دانلود موازی"
+
+msgid "Number of parallel downloads (1-100)"
+msgstr "تعداد دانلودهای موازی (۱-۱۰۰)"
+
+msgid "CleanMethod"
+msgstr "روش پاکسازی"
+
+msgid "Cache cleaning method"
+msgstr "روش پاکسازی حافظه موقت"
+
+msgid "KeepInstalled"
+msgstr "نگه‌داشتن نصب‌شده"
+
+msgid "KeepCurrent"
+msgstr "نگه‌داشتن فعلی"
+
+msgid "Architecture"
+msgstr "معماری"
+
+msgid "System architecture"
+msgstr "معماری سیستم"
+
+msgid "auto"
+msgstr "خودکار"
+
+msgid "x86_64"
+msgstr "اکس۸۶_۶۴"
+
+msgid "x86_64_v3"
+msgstr "اکس۸۶_۶۴_وی۳"
+
+msgid "Error"
+msgstr "خطا"
+
+msgid "Failed to parse pacman.conf"
+msgstr "تجزیه pacman.conf ناموفق بود"
+
+msgid "Settings saved successfully."
+msgstr "تنظیمات با موفقیت ذخیره شد."
+
+msgid "Terminal Error"
+msgstr "خطای پایانه"
+
+msgid "No suitable terminal emulator found."
+msgstr "شبیه‌ساز پایانه مناسبی یافت نشد."
+
+msgid "Failed to sync repositories"
+msgstr "همگام‌سازی مخازن ناموفق بود"
+
+msgid "Pacman executable not found"
+msgstr "پیشان‌نویس پکمن یافت نشد"
+
+msgid "Unexpected error during sync"
+msgstr "خطای غیرمنتظره در هنگام همگام‌سازی"
+
+msgid "Failed to update system"
+msgstr "به‌روزرسانی سیستم ناموفق بود"
+
+msgid "Unexpected error during update"
+msgstr "خطای غیرمنتظره در هنگام به‌روزرسانی"
+
+msgid "Failed to check for updates"
+msgstr "بررسی به‌روزرسانی‌ها ناموفق بود"
+
+msgid "Failed to clean cache"
+msgstr "پاکسازی انباره ناموفق بود"
+
+msgid "Unexpected error during cache clean"
+msgstr "خطای غیرمنتظره در هنگام پاکسازی انباره"
+
+msgid "Syncing Repositories"
+msgstr "همگام‌سازی مخازن"
+
+msgid "Mirrorlist saved successfully"
+msgstr "فهرست آینه با موفقیت ذخیره شد"
+
+msgid "Version"
+msgstr "نسخه"
+
+msgid "Concurrent testing"
+msgstr "آزمون همزمان"
+
+msgid "Fixed parsing"
+msgstr "تجزیه رفع شد"
+
+msgid "Added"
+msgstr "افزوده شد"
+
+msgid "Iranian mirrors"
+msgstr "آینه‌های ایرانی"
+
+msgid "Total mirrors"
+msgstr "مجموع آینه‌ها"
+
+msgid "OK"
+msgstr "تایید"
