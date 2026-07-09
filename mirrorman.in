@@ -1,6 +1,0 @@
-#!/bin/sh
-# mirrorman.in - Launcher for Mirrorman
-# Copyright 2026 Parch GNU/Linux Team
-# SPDX-License-Identifier: GPL-3.0-or-later
-
-exec /usr/bin/env python3 /usr/share/mirrorman/main.py "$@"

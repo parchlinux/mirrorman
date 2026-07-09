@@ -5,6 +5,20 @@ All notable changes to MirrorMan will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3] - 2026-07-10
+
+### Added
+- Full Rust rewrite of Python mirrorman GUI
+- Package cache cleaning (pacman -Sc)
+- Custom repository addition dialog with name and URL entry
+- License and changelog.md from original Python project
+
+### Changed
+- Ported from Python/GTK4 to Rust/gtk4-rs/libadwaita
+- Concurrent speed testing (50 worker threads)
+- Persian translation updated with new UI strings
+- Translation .pot and .po files updated with 15 new strings
+
 ## [0.2.1] - 2026-04-15
 
 ### Added

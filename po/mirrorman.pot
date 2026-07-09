@@ -1,51 +1,50 @@
-# Persian translation for mirrorman
+# Parch Repository Manager - Translation Template
 # Copyright (C) 2026 Parch GNU/Linux Team
 # This file is distributed under the same license as the mirrorman package.
 #
-# Translators:
-# Parch GNU/Linux Team <team@parchlinux.com>, 2026.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
 #
+#, fuzzy
 msgid ""
 msgstr ""
 "Project-Id-Version: mirrorman 0.3\n"
 "Report-Msgid-Bugs-To: https://github.com/parchlinux/mirrorman\n"
 "POT-Creation-Date: 2026-07-10 00:00+0000\n"
-"PO-Revision-Date: 2026-07-10 00:00+0000\n"
-"Last-Translator: Parch GNU/Linux Team <team@parchlinux.com>\n"
-"Language-Team: Persian <https://github.com/parchlinux/mirrorman>\n"
-"Language: fa\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
 #: src/main.rs
 msgid "About"
-msgstr "درباره"
+msgstr ""
 
 #: src/main.rs
 msgid "Add"
-msgstr "افزودن"
+msgstr ""
 
 #: src/main.rs
 msgid "Added 5 Iranian mirrors."
-msgstr "۵ آینه ایرانی اضافه شد."
+msgstr ""
 
 #: src/main.rs
 msgid "Added repository:"
-msgstr "مخزن اضافه شد:"
+msgstr ""
 
 #: src/main.rs
 msgid "Add Iranian mirrors"
-msgstr "افزودن آینه‌های ایرانی"
+msgstr ""
 
 #: src/main.rs
 msgid "Add Repository"
-msgstr "افزودن مخزن"
+msgstr ""
 
 #: src/main.rs
 msgid "Age"
-msgstr "قدمت"
+msgstr ""
 
 #: src/main.rs
 msgid "ArchLinuxCN"
@@ -53,7 +52,7 @@ msgstr ""
 
 #: src/main.rs
 msgid "Availability"
-msgstr "دسترسی"
+msgstr ""
 
 #: src/main.rs
 msgid "BlackArch"
@@ -61,11 +60,11 @@ msgstr ""
 
 #: src/main.rs
 msgid "Cache Clean Failed"
-msgstr "پاک‌سازی حافظه نهان ناموفق"
+msgstr ""
 
 #: src/main.rs
 msgid "Cancel"
-msgstr "انصراف"
+msgstr ""
 
 #: src/main.rs
 msgid "Chaotic-AUR"
@@ -73,83 +72,83 @@ msgstr ""
 
 #: src/main.rs
 msgid "Checking availability..."
-msgstr "در حال بررسی دسترسی..."
+msgstr ""
 
 #: src/main.rs
 msgid "Check mirror availability via HEAD request"
-msgstr "بررسی دسترسی آینه با درخواست HEAD"
+msgstr ""
 
 #: src/main.rs
 msgid "Clean"
-msgstr "پاک‌سازی"
+msgstr ""
 
 #: src/main.rs
 msgid "Cleaning Cache"
-msgstr "در حال پاک‌سازی حافظه نهان"
+msgstr ""
 
 #: src/main.rs
 msgid "Clean package cache"
-msgstr "پاک‌سازی حافظه نهان بسته‌ها"
+msgstr ""
 
 #: src/main.rs
 msgid "Configure mirror selection criteria"
-msgstr "پیکربندی معیارهای انتخاب آینه"
+msgstr ""
 
 #: src/main.rs
 msgid "Configure your filters and click 'Fetch' to load available mirrors"
-msgstr "فیلترهای خود را تنظیم کرده و روی «دریافت» کلیک کنید تا آینه‌های موجود بارگذاری شوند"
+msgstr ""
 
 #: src/main.rs
 msgid "Copyright 2026 Parch GNU/Linux Team"
-msgstr "حق نشر ۲۰۲۶ تیم گنو/لینوکس پارچ"
+msgstr ""
 
 #: src/main.rs
 msgid "Country"
-msgstr "کشور"
+msgstr ""
 
 #: src/main.rs
 msgid "Disable"
-msgstr "غیرفعال"
+msgstr ""
 
 #: src/main.rs
 msgid "Disabled"
-msgstr "غیرفعال"
+msgstr ""
 
 #: src/main.rs
 msgid "Enable"
-msgstr "فعال"
+msgstr ""
 
 #: src/main.rs
 msgid "Enabled"
-msgstr "فعال"
+msgstr ""
 
 #: src/main.rs
 msgid "Enable or disable additional repositories"
-msgstr "فعال یا غیرفعال کردن مخازن اضافی"
+msgstr ""
 
 #: src/main.rs
 msgid "Enable or disable repositories"
-msgstr "فعال یا غیرفعال کردن مخازن"
+msgstr ""
 
 #: src/main.rs
 msgid "Enter a repository name and server URL"
-msgstr "نام مخزن و آدرس سرور را وارد کنید"
+msgstr ""
 
 #: src/main.rs
 msgid "Error"
-msgstr "خطا"
+msgstr ""
 
 #: src/main.rs
 msgid "Fetch"
-msgstr "دریافت"
+msgstr ""
 
 #: src/main.rs
 msgid "Fetch Failed"
-msgstr "دریافت ناموفق"
+msgstr ""
 
 #: src/main.rs
 msgid "Fetching mirrors..."
-msgstr "در حال دریافت آینه‌ها..."
+msgstr ""
 
 #: src/main.rs
 msgid "IPv4"
@@ -161,287 +160,287 @@ msgstr ""
 
 #: src/main.rs
 msgid "IP Version"
-msgstr "نسخه IP"
+msgstr ""
 
 #: src/main.rs
 msgid "Iran Blackout"
-msgstr "قطع اینترنت ایران"
+msgstr ""
 
 #: src/main.rs
 msgid "Iran Blackout Added"
-msgstr "آینه‌های قطع اینترنت ایران اضافه شد"
+msgstr ""
 
 #: src/main.rs
 msgid "Mirror Filters"
-msgstr "فیلترهای آینه"
+msgstr ""
 
 #: src/main.rs
 msgid "Mirrorlist saved and repositories synced successfully"
-msgstr "فهرست آینه ذخیره و مخازن با موفقیت همگام‌سازی شدند"
+msgstr ""
 
 #: src/main.rs
 msgid "No IP Versions"
-msgstr "بدون نسخه IP"
+msgstr ""
 
 #: src/main.rs
 msgid "No Mirrors Loaded"
-msgstr "هیچ آینه‌ای بارگذاری نشده"
+msgstr ""
 
 #: src/main.rs
 msgid "No Protocols"
-msgstr "بدون پروتکل"
+msgstr ""
 
 #: src/main.rs
 msgid "Not tested"
-msgstr "آزمایش نشده"
+msgstr ""
 
 #: src/main.rs
 msgid "OK"
-msgstr "تأیید"
+msgstr ""
 
 #: src/main.rs
 msgid "Package cache cleaned successfully"
-msgstr "حافظه نهان بسته‌ها با موفقیت پاک‌سازی شد"
+msgstr ""
 
 #: src/main.rs
 msgid "Pacman Settings"
-msgstr "تنظیمات Pacman"
+msgstr ""
 
 #: src/main.rs
 msgid "Parch GNU/Linux Team"
-msgstr "تیم گنو/لینوکس پارچ"
+msgstr ""
 
 #: src/main.rs
 msgid "Parch Repository Manager"
-msgstr "مدیر مخازن پارچ"
+msgstr ""
 
 #: src/main.rs
 msgid "Protocol"
-msgstr "پروتکل"
+msgstr ""
 
 #: src/main.rs
 msgid "Ranking Error"
-msgstr "خطا در رتبه‌بندی"
+msgstr ""
 
 #: src/main.rs
 msgid "Refresh Mirrors"
-msgstr "به‌روزرسانی آینه‌ها"
+msgstr ""
 
 #: src/main.rs
 msgid "Removing old package files from cache..."
-msgstr "در حال حذف فایل‌های قدیمی بسته از حافظه نهان..."
+msgstr ""
 
 #: src/main.rs
 msgid "Repositories"
-msgstr "مخازن"
+msgstr ""
 
 #: src/main.rs
 msgid "Repository Added"
-msgstr "مخزن اضافه شد"
+msgstr ""
 
 #: src/main.rs
 msgid "Repository name (e.g. myrepo)"
-msgstr "نام مخزن (مثلاً myrepo)"
+msgstr ""
 
 #: src/main.rs
 msgid "Save mirrorlist and sync repositories"
-msgstr "ذخیره فهرست آینه و همگام‌سازی مخازن"
+msgstr ""
 
 #: src/main.rs
 msgid "Saving mirrorlist and refreshing package databases..."
-msgstr "در حال ذخیره فهرست آینه و به‌روزرسانی پایگاه داده بسته‌ها..."
+msgstr ""
 
 #: src/main.rs
 msgid "Select at least one IP version"
-msgstr "حداقل یک نسخه IP را انتخاب کنید"
+msgstr ""
 
 #: src/main.rs
 msgid "Select at least one protocol"
-msgstr "حداقل یک پروتکل را انتخاب کنید"
+msgstr ""
 
 #: src/main.rs
 msgid "Server URL (e.g. https://mirror.example.com/archlinux/$repo/os/$arch)"
-msgstr "آدرس سرور (مثلاً https://mirror.example.com/archlinux/$repo/os/$arch)"
+msgstr ""
 
 #: src/main.rs
 msgid "Show only synchronized mirrors"
-msgstr "فقط آینه‌های همگام‌سازی‌شده را نشان بده"
+msgstr ""
 
 #: src/main.rs
 msgid "Sort by:"
-msgstr "مرتب‌سازی بر اساس:"
+msgstr ""
 
 #: src/main.rs
 msgid "Speed"
-msgstr "سرعت"
+msgstr ""
 
 #: src/main.rs
 msgid "Success"
-msgstr "موفقیت"
+msgstr ""
 
 #: src/main.rs
 msgid "Sync"
-msgstr "همگام‌سازی"
+msgstr ""
 
 #: src/main.rs
 msgid "Sync Failed"
-msgstr "همگام‌سازی ناموفق"
+msgstr ""
 
 #: src/main.rs
 msgid "Syncing Repositories"
-msgstr "در حال همگام‌سازی مخازن"
+msgstr ""
 
 #: src/main.rs
 msgid "Sync repositories to use it"
-msgstr "برای استفاده از آن مخازن را همگام‌سازی کنید"
+msgstr ""
 
 #: src/main.rs
 msgid "Testing mirrors..."
-msgstr "در حال آزمایش آینه‌ها..."
+msgstr ""
 
 #: src/main.rs
 msgid "Test & Rank"
-msgstr "آزمایش و رتبه‌بندی"
+msgstr ""
 
 #: src/main.rs
 msgid "Third-Party Repositories"
-msgstr "مخازن شخص ثالث"
+msgstr ""
 
 #: src/main.rs
 msgid "This will update all system packages. Continue?"
-msgstr "این کار همه بسته‌های سیستم را به‌روزرسانی می‌کند. ادامه می‌دهید؟"
+msgstr ""
 
 #: src/main.rs
 msgid "Total mirrors:"
-msgstr "مجموع آینه‌ها:"
+msgstr ""
 
 #: src/main.rs
 msgid "Unknown"
-msgstr "ناشناخته"
+msgstr ""
 
 #: src/main.rs
 msgid "Update"
-msgstr "به‌روزرسانی"
+msgstr ""
 
 #: src/main.rs
 msgid "Update all system packages"
-msgstr "به‌روزرسانی همه بسته‌های سیستم"
+msgstr ""
 
 #: src/main.rs
 msgid "Update System?"
-msgstr "به‌روزرسانی سیستم؟"
+msgstr ""
 
 #: src/main.rs
 msgid "Up-to-date only"
-msgstr "فقط به‌روزها"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "Architecture"
-msgstr "معماری"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "auto"
-msgstr "خودکار"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "Cache cleaning method"
-msgstr "روش پاک‌سازی حافظه نهان"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "Check for sufficient disk space before installing"
-msgstr "بررسی فضای کافی دیسک قبل از نصب"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "CheckSpace"
-msgstr "بررسی فضا"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "CleanMethod"
-msgstr "روش پاک‌سازی"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "Display a candy cane progress bar"
-msgstr "نمایش نوار پیشرفت آب‌نباتی"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "HoldPkg"
-msgstr "نگهداری بسته"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "IgnorePkg"
-msgstr "نادیده‌گرفتن بسته"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "ILoveCandy"
-msgstr "نوار آب‌نباتی"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "KeepCurrent"
-msgstr "نگهداری فعلی"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "KeepInstalled"
-msgstr "نگهداری نصب‌شده"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "NoExtract"
-msgstr "بدون استخراج"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "NoUpgrade"
-msgstr "بدون به‌روزرسانی"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "Number of parallel downloads (1-100)"
-msgstr "تعداد دانلودهای همزمان (۱-۱۰۰)"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "Package Management"
-msgstr "مدیریت بسته"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "Pacman Options"
-msgstr "گزینه‌های Pacman"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "ParallelDownloads"
-msgstr "دانلود همزمان"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "Save"
-msgstr "ذخیره"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "Settings saved successfully."
-msgstr "تنظیمات با موفقیت ذخیره شد."
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "Space-separated files to protect from upgrade"
-msgstr "فایل‌های جدا شده با فاصله برای محافظت از به‌روزرسانی"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "Space-separated files to skip during extraction"
-msgstr "فایل‌های جدا شده با فاصله برای رد شدن در هنگام استخراج"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "Space-separated packages to hold during upgrades"
-msgstr "بسته‌های جدا شده با فاصله برای نگهداری در به‌روزرسانی"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "Space-separated packages to ignore during upgrades"
-msgstr "بسته‌های جدا شده با فاصله برای نادیده گرفتن در به‌روزرسانی"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "Space-separated packages to sync first"
-msgstr "بسته‌های جدا شده با فاصله برای همگام‌سازی اولیه"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "SyncFirst"
-msgstr "همگام‌سازی اولیه"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "System architecture"
-msgstr "معماری سیستم"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "x86_64"

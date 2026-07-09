@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Parch Repository Manager
+GenericName=Mirror Manager
+Comment=Manage Pacman mirrors and repositories
+Categories=System;PackageManager;GTK;
+Keywords=mirror;pacman;package;repository;
+Exec=mirrorman
+Icon=com.parchlinux.mirrorman
+Terminal=false
+StartupNotify=true
+X-GNOME-UsesNotifications=true

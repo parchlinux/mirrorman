@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <action id="com.parchlinux.mirrorman.edit-mirrorlist">
+    <description>Edit Pacman mirrorlist</description>
+    <message>Authentication is required to modify the Pacman mirrorlist</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+  <action id="com.parchlinux.mirrorman.edit-pacman-conf">
+    <description>Edit Pacman configuration</description>
+    <message>Authentication is required to modify the Pacman configuration</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+  <action id="com.parchlinux.mirrorman.sync-repos">
+    <description>Synchronize Pacman repositories</description>
+    <message>Authentication is required to synchronize Pacman repositories</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+  <action id="com.parchlinux.mirrorman.third-party">
+    <description>Enable third-party repository</description>
+    <message>Authentication is required to enable a third-party repository</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+</policyconfig>
