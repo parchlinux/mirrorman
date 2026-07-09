@@ -3,7 +3,7 @@
 pkgname=mirrorman
 pkgver=0.3.0
 pkgrel=1
-pkgdesc="Pacman mirror and repository manager"
+pkgdesc="Pacman mirror and repository manager for Parch Linux"
 arch=('x86_64')
 url="https://github.com/parchlinux/mirrorman"
 license=('GPL3')
@@ -18,22 +18,22 @@ depends=(
 )
 makedepends=('cargo')
 source=(
-  "mirrorman-$pkgver.tar.gz::https://github.com/parchlinux/mirrorman/archive/v$pkgver.tar.gz"
+  "git+https://github.com/parchlinux/mirrorman.git#tag=v$pkgver"
 )
 sha256sums=('SKIP')
 
 prepare() {
-  cd "$srcdir/mirrorman-$pkgver"
+  cd "$srcdir/mirrorman"
 }
 
 build() {
-  cd "$srcdir/mirrorman-$pkgver"
-  cargo build --release --frozen
+  cd "$srcdir/mirrorman"
+  cargo build --release
   msgfmt po/fa.po -o locale/fa/LC_MESSAGES/mirrorman.mo
 }
 
 package() {
-  cd "$srcdir/mirrorman-$pkgver"
+  cd "$srcdir/mirrorman"
 
   install -Dm755 "target/release/mirrorman" \
     "$pkgdir/usr/bin/mirrorman"
