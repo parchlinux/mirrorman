@@ -19,7 +19,7 @@ static APP_ID: &str = "com.parchlinux.mirrorman";
 fn build_ui(app: &adw::Application) {
     let window = adw::ApplicationWindow::new(app);
     window.set_title(Some(tr!("Parch Repository Manager")));
-    window.set_icon_name(Some("system-software-manager"));
+    window.set_icon_name(Some("com.parchlinux.mirrorman"));
     window.set_default_size(1200, 800);
 
     // ── Shared state ──
@@ -1035,7 +1035,7 @@ fn build_ui(app: &adw::Application) {
             let a = adw::AboutWindow::new();
             a.set_transient_for(Some(&win));
             a.set_application_name(tr!("Parch Repository Manager"));
-            a.set_application_icon("system-software-manager");
+            a.set_application_icon("com.parchlinux.mirrorman");
             a.set_version("0.3");
             a.set_developer_name(tr!("Parch GNU/Linux Team"));
             a.set_website("https://parchlinux.com");
