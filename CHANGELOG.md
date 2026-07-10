@@ -5,6 +5,34 @@ All notable changes to MirrorMan will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4] - 2026-07-10
+
+### Added
+- SigLevel dropdown in Add Repository dialog (Never, Optional, Required, etc.)
+- Mirrorlist backup with timestamp button (pkexec cp)
+- Share/copy mirror configuration to clipboard (gtk4 clipboard)
+- BlackArch strap.sh SHA1 verification on install
+- ArchLinuxCN archlinuxcn-keyring auto-install
+- SigLevel support in custom and third-party repository sections
+- Backup and Share buttons in the toolbar
+
+### Changed
+- Bumped version to 0.4
+- Persian translations: filter→صافی, file→پرونده, system→سامانه, copy→رونوشت, clipboard→بریده‌دان
+- Translation .pot and .po files updated with all new strings (now 90+ entries)
+- Iranian mirror count decreased from 5 to 3 (removed dead mirrors)
+- Third-party repo toggles now use internal slugs instead of display names
+- Sort/rank buttons enabled immediately after Iran Blackout adds mirrors
+- Pacman.conf regex relaxed to detect sections with trailing content
+
+### Fixed
+- Third-party repo name mismatch breaking toggle (display name vs internal slug)
+- Dead Iranian mirrors mirror.0-1.cloud and mirror.kernel.ir (connection failed)
+- Multilib Include lines dropped on re-enable
+- Chaotic-AUR/ArchLinuxCN detection failing due to over-strict regex anchor
+- SigLevel missing from generated third-party repo sections
+- Toggle switch state not reverting on config write failure
+
 ## [0.3] - 2026-07-10
 
 ### Added

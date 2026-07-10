@@ -46,7 +46,7 @@ impl RepoConfig {
             Err(_) => return,
         };
 
-        let repo_pattern = regex_lite::Regex::new(r"^\s*(#?)\s*\[([^\]]+)\]\s*$").unwrap();
+        let repo_pattern = regex_lite::Regex::new(r"^\s*(#?)\s*\[([^\]]+)\]").unwrap();
 
         for line in content.lines() {
             if let Some(caps) = repo_pattern.captures(line) {
@@ -107,7 +107,7 @@ impl RepoConfig {
         Ok(())
     }
 
-    pub fn add_repository(&mut self, repo_name: &str, repo_url: &str) -> Result<(), String> {
+    pub fn add_repository(&mut self, repo_name: &str, repo_url: &str, siglevel: &str) -> Result<(), String> {
         use std::io::Write;
 
         if repo_name.is_empty() || repo_url.is_empty() {
@@ -123,7 +123,12 @@ impl RepoConfig {
             String::new()
         };
 
-        let modified = format!("{config_text}\n[{repo_name}]\nServer = {repo_url}\n");
+        let sig_line = if siglevel.is_empty() {
+            String::new()
+        } else {
+            format!("SigLevel = {siglevel}\n")
+        };
+        let modified = format!("{config_text}\n[{repo_name}]\nServer = {repo_url}\n{sig_line}");
 
         let temp_path = "/tmp/mirrorman_pacman_conf";
         {
@@ -169,14 +174,15 @@ fn toggle_repo_text(config_text: &str, repo_name: &str, enable: bool, section_sn
 
     for line in config_text.lines() {
         let stripped = line.trim();
-        if stripped == section_header {
+        let header_check = stripped.trim_start_matches('#').trim();
+        if header_check == section_header {
             found_section = true;
             in_section = true;
             if enable {
                 new_lines.push(line.trim_start_matches('#').to_string());
-                // Add replacement Server/Include lines from snippet
+                // Add replacement lines from snippet
                 for sl in &snippet_lines[1..] {
-                    if sl.starts_with("Include =") || sl.starts_with("Server =") {
+                    if sl.starts_with("Include =") || sl.starts_with("Server =") || sl.starts_with("SigLevel =") {
                         new_lines.push(sl.to_string());
                     }
                 }
@@ -191,21 +197,24 @@ fn toggle_repo_text(config_text: &str, repo_name: &str, enable: bool, section_sn
         }
 
         if in_section {
-            if stripped.starts_with('[') && stripped != section_header {
+            let header_uncommented = stripped.trim_start_matches('#').trim();
+            if header_uncommented.starts_with('[') && header_uncommented != section_header {
                 in_section = false;
                 new_lines.push(line.to_string());
                 continue;
             }
-            // Skip existing Include/Server lines — already replaced from snippet
-            if stripped.starts_with("Include =") || stripped.starts_with("Server =") {
+            if header_uncommented.starts_with("Include =") || header_uncommented.starts_with("Server =") || header_uncommented.starts_with("SigLevel =") {
                 if !enable {
                     if !line.starts_with('#') {
                         new_lines.push(format!("#{line}"));
                     } else {
                         new_lines.push(line.to_string());
                     }
+                } else if snippet_lines.is_empty() {
+                    new_lines.push(line.trim_start_matches('#').to_string());
                 }
-                // When enabling, skip the old line (replaced above)
+                // When enabling with snippet: skip old line (replaced above)
+                // When enabling without snippet (standard repos): keep existing line
             } else {
                 new_lines.push(line.to_string());
             }
@@ -229,12 +238,12 @@ fn toggle_repo_text(config_text: &str, repo_name: &str, enable: bool, section_sn
 
 fn get_third_party_section(repo_name: &str) -> Option<String> {
     match repo_name {
-        "chaotic-aur" => Some("[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist\n".to_string()),
+        "chaotic-aur" => Some("[chaotic-aur]\nSigLevel = Optional TrustAll\nInclude = /etc/pacman.d/chaotic-mirrorlist\n".to_string()),
         "blackarch" => Some(
-            "[blackarch]\nServer = https://blackarch.org/blackarch/$repo/os/$arch\n".to_string(),
+            "[blackarch]\nSigLevel = Optional\nServer = https://blackarch.org/blackarch/$repo/os/$arch\n".to_string(),
         ),
         "archlinuxcn" => {
-            Some("[archlinuxcn]\nServer = https://repo.archlinuxcn.org/$arch\n".to_string())
+            Some("[archlinuxcn]\nSigLevel = Optional TrustAll\nServer = https://repo.archlinuxcn.org/$arch\n".to_string())
         }
         _ => None,
     }
@@ -262,14 +271,14 @@ fn enable_chaotic_aur() -> Result<(), String> {
 }
 
 fn enable_blackarch() -> Result<(), String> {
-    run_cmd(&["pkexec", "bash", "-c", "cd /tmp && curl -O https://blackarch.org/strap.sh && chmod +x strap.sh && ./strap.sh && rm -f strap.sh"])?;
+    run_cmd(&["pkexec", "bash", "-c", "cd /tmp && curl -O https://blackarch.org/strap.sh && echo '26849980b35a42e6e192c6d9ed8c46f0d6d06047  strap.sh' | sha1sum -c && chmod +x strap.sh && ./strap.sh && rm -f strap.sh"])?;
     Ok(())
 }
 
 fn enable_archlinuxcn() -> Result<(), String> {
     run_cmd(&["pkexec", "pacman-key", "--recv-key", "4D41FD3D9E72E7966A573093E8CA6AEB220E236C", "--keyserver", "keyserver.ubuntu.com"])?;
     run_cmd(&["pkexec", "pacman-key", "--lsign-key", "4D41FD3D9E72E7966A573093E8CA6AEB220E236C"])?;
-    // keyring package install requires repo to be synced first — done manually by user
+    run_cmd(&["pkexec", "pacman", "-S", "archlinuxcn-keyring", "--noconfirm"])?;
     Ok(())
 }
 

@@ -226,6 +226,15 @@ fn build_ui(app: &adw::Application) {
     clean_btn.set_tooltip_text(Some(tr!("Clean package cache")));
     sys_box.append(&clean_btn);
 
+    let backup_btn = gtk4::Button::new();
+    let backup_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
+    backup_box.set_halign(gtk4::Align::Center);
+    backup_box.append(&gtk4::Image::from_icon_name("document-save-symbolic"));
+    backup_box.append(&gtk4::Label::new(Some(tr!("Backup"))));
+    backup_btn.set_child(Some(&backup_box));
+    backup_btn.set_tooltip_text(Some(tr!("Backup mirrorlist with timestamp")));
+    sys_box.append(&backup_btn);
+
     let update_btn = gtk4::Button::new();
     let update_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
     update_box.set_halign(gtk4::Align::Center);
@@ -313,6 +322,14 @@ fn build_ui(app: &adw::Application) {
     iran_btn.set_child(Some(&ibox));
     iran_btn.set_tooltip_text(Some(tr!("Add Iranian mirrors")));
     mirror_toolbar.append(&iran_btn);
+
+    let share_btn = gtk4::Button::new();
+    let share_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
+    share_box.append(&gtk4::Image::from_icon_name("edit-copy-symbolic"));
+    share_box.append(&gtk4::Label::new(Some(tr!("Share"))));
+    share_btn.set_child(Some(&share_box));
+    share_btn.set_tooltip_text(Some(tr!("Copy mirror configuration to clipboard")));
+    mirror_toolbar.append(&share_btn);
 
     let mirror_scroll = gtk4::ScrolledWindow::new();
     mirror_scroll.set_vexpand(true);
@@ -706,14 +723,42 @@ fn build_ui(app: &adw::Application) {
         let mirror_list = mirror_list.clone();
         let mirror_scroll = mirror_scroll.clone();
         let win = window.clone();
+        let l_sort_speed = sort_speed_btn.clone();
+        let l_sort_country = sort_country_btn.clone();
+        let l_sort_age = sort_age_btn.clone();
+        let l_rank = rank_btn.clone();
         iran_btn.connect_clicked(move |_| {
             let mut mgr = mm.lock().unwrap();
             mgr.add_iran_mirrors();
             let count = mgr.mirrors.len();
             mirror_scroll.set_child(Some(&mirror_list));
             refresh_list_ui(&mirror_list, &mgr.mirrors);
+            l_sort_speed.set_sensitive(true);
+            l_sort_country.set_sensitive(true);
+            l_sort_age.set_sensitive(true);
+            l_rank.set_sensitive(true);
             inform(&win, tr!("Iran Blackout Added"),
-                &format!("{}\n\n{} {}", tr!("Added 5 Iranian mirrors."), tr!("Total mirrors:"), count));
+                &format!("{}\n\n{} {}", tr!("Added 3 Iranian mirrors."), tr!("Total mirrors:"), count));
+        });
+    }
+
+    // ── Share ──
+    {
+        let mm = mm.clone();
+        let win = window.clone();
+        share_btn.connect_clicked(move |_| {
+            let content = {
+                let mgr = mm.lock().unwrap();
+                sync_manager::SyncManager::generate_share_content(&mgr.mirrors)
+            };
+            if content.is_empty() {
+                alert(&win, tr!("Nothing to Share"), tr!("No mirrors configured yet"));
+                return;
+            }
+            if let Some(display) = gtk4::gdk::Display::default() {
+                display.clipboard().set_text(&content);
+            }
+            inform(&win, tr!("Copied!"), tr!("Mirror configuration copied to clipboard"));
         });
     }
 
@@ -954,6 +999,50 @@ fn build_ui(app: &adw::Application) {
         });
     }
 
+    // ── Backup ──
+    {
+        let win = window.clone();
+        backup_btn.connect_clicked(move |_| {
+            let dialog = adw::AlertDialog::new(
+                Some(tr!("Backing Up")),
+                Some(tr!("Creating timestamped backup of mirrorlist...")),
+            );
+            let progress = gtk4::ProgressBar::new();
+            progress.set_pulse_step(0.1);
+            dialog.set_extra_child(Some(&progress));
+            dialog.present(Some(&win));
+
+            let result: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+            let result_check = result.clone();
+            let win_c = win.clone();
+            let _pulse = glib::timeout_add_local(
+                std::time::Duration::from_millis(100),
+                move || {
+                    progress.pulse();
+                    if let Some(ref msg) = *result_check.lock().unwrap() {
+                        dialog.close();
+                        if msg == "ok" {
+                            inform(&win_c, tr!("Success"), tr!("Mirrorlist backup created successfully"));
+                        } else {
+                            alert(&win_c, tr!("Backup Failed"), msg);
+                        }
+                        glib::ControlFlow::Break
+                    } else {
+                        glib::ControlFlow::Continue
+                    }
+                },
+            );
+
+            std::thread::spawn(move || {
+                let msg = match sync_manager::SyncManager::backup_mirrorlist() {
+                    Ok(_) => "ok".to_string(),
+                    Err(e) => e,
+                };
+                *result.lock().unwrap() = Some(msg);
+            });
+        });
+    }
+
     // ── Add Repository ──
     {
         let rc = rc.clone();
@@ -970,8 +1059,25 @@ fn build_ui(app: &adw::Application) {
             name_entry.set_placeholder_text(Some(tr!("Repository name (e.g. myrepo)")));
             let url_entry = gtk4::Entry::new();
             url_entry.set_placeholder_text(Some(tr!("Server URL (e.g. https://mirror.example.com/archlinux/$repo/os/$arch)")));
+
+            let siglevel_label = gtk4::Label::new(Some(tr!("SigLevel")));
+            siglevel_label.set_halign(gtk4::Align::Start);
+            let siglevel_model = gtk4::StringList::new(&[
+                "",
+                "Never",
+                "Optional",
+                "Required",
+                "Optional TrustAll",
+                "Required TrustAll",
+                "Optional TrustedOnly",
+                "Required TrustedOnly",
+            ]);
+            let siglevel_dropdown = gtk4::DropDown::new(Some(siglevel_model.clone()), None::<&gtk4::Expression>);
+            siglevel_dropdown.set_selected(4); // "Optional TrustAll"
             content.append(&name_entry);
             content.append(&url_entry);
+            content.append(&siglevel_label);
+            content.append(&siglevel_dropdown);
             dialog.set_extra_child(Some(&content));
 
             dialog.add_response("cancel", tr!("Cancel"));
@@ -980,6 +1086,8 @@ fn build_ui(app: &adw::Application) {
 
             let name_entry = name_entry.clone();
             let url_entry = url_entry.clone();
+            let siglevel_dropdown = siglevel_dropdown.clone();
+            let siglevel_model = siglevel_model.clone();
             let rc = rc.clone();
             let repo_list = repo_list.clone();
             let win_resp = win.clone();
@@ -989,7 +1097,11 @@ fn build_ui(app: &adw::Application) {
                 }
                 let name = name_entry.text().to_string();
                 let url = url_entry.text().to_string();
-                match rc.lock().unwrap().add_repository(&name, &url) {
+                let siglevel = siglevel_model
+                    .string(siglevel_dropdown.selected())
+                    .map(|s| s.to_string())
+                    .unwrap_or_default();
+                match rc.lock().unwrap().add_repository(&name, &url, &siglevel) {
                     Ok(()) => {
                         let row = adw::ActionRow::new();
                         row.set_title(&name);
@@ -1036,27 +1148,24 @@ fn build_ui(app: &adw::Application) {
             a.set_transient_for(Some(&win));
             a.set_application_name(tr!("Parch Repository Manager"));
             a.set_application_icon("com.parchlinux.mirrorman");
-            a.set_version("0.3");
+            a.set_version("0.4");
             a.set_developer_name(tr!("Parch GNU/Linux Team"));
             a.set_website("https://parchlinux.com");
             a.set_copyright(tr!("Copyright 2026 Parch GNU/Linux Team"));
             a.set_license_type(gtk4::License::Gpl30);
             a.set_release_notes(tr!(
-"<p>Version 0.3 (2026)</p>
+"<p>Version 0.4 (2026)</p>
 <ul>
-<li>Full Rust rewrite of Python mirrorman GUI</li>
-<li>Country flag emoji display</li>
-<li>Mirror availability check via HEAD requests</li>
-<li>Concurrent speed testing (50 workers)</li>
-<li>Pacman.conf settings editor</li>
-<li>Iranian mirror support (Iran Blackout)</li>
-<li>Polkit integration with policy file</li>
-<li>Mirrorlist backup and safety checks</li>
-<li>Third-party repository key imports</li>
-<li>Desktop file, app icon, and PKGBUILD</li>
-<li>i18n/gettext translation support</li>
-<li>Custom repository addition dialog</li>
-<li>Package cache cleaning</li>
+<li>SigLevel dropdown in Add Repository dialog</li>
+<li>Mirrorlist backup with timestamp button</li>
+<li>Share/copy mirror configuration to clipboard</li>
+<li>BlackArch strap.sh SHA1 verification</li>
+<li>ArchLinuxCN keyring auto-install</li>
+<li>SigLevel support in custom and third-party repos</li>
+<li>Fixed dead Iranian mirrors removal</li>
+<li>Fixed third-party repo detection and toggle</li>
+<li>Fixed multilib Include lines on re-enable</li>
+<li>Updated Persian translations</li>
 </ul>"));
             a.present();
         });
@@ -1074,7 +1183,13 @@ fn build_ui(app: &adw::Application) {
                 None => break,
             };
             let row = row.downcast::<adw::ActionRow>().expect("ActionRow");
-            let name = row.title().to_string();
+            let row_title = row.title().to_string();
+            let name = if is_third {
+                let cfg = rc.lock().unwrap();
+                cfg.third_party_repos.get(i as usize).cloned().unwrap_or(row_title)
+            } else {
+                row_title
+            };
             if let Some(sw) = row.activatable_widget().and_downcast::<gtk4::Switch>() {
                 let rc = rc.clone();
                 let tx = tx.clone();
@@ -1088,8 +1203,9 @@ fn build_ui(app: &adw::Application) {
                         }
                     }
                     let mut cfg = rc.lock().unwrap();
-                    if let Err(e) = cfg.toggle_repo_in_config(&name, active, is_third) {
+                    if let Err(e) = cfg.toggle_repo_in_config(&name_c, active, is_third) {
                         let _ = tx.send(format!("err:{e}"));
+                        return glib::Propagation::Stop;
                     }
                     glib::Propagation::Proceed
                 });

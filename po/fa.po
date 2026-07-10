@@ -7,7 +7,7 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: mirrorman 0.3\n"
+"Project-Id-Version: mirrorman 0.4\n"
 "Report-Msgid-Bugs-To: https://github.com/parchlinux/mirrorman\n"
 "POT-Creation-Date: 2026-07-10 00:00+0000\n"
 "PO-Revision-Date: 2026-07-10 00:00+0000\n"
@@ -28,8 +28,8 @@ msgid "Add"
 msgstr "افزودن"
 
 #: src/main.rs
-msgid "Added 5 Iranian mirrors."
-msgstr "۵ آینه ایرانی اضافه شد."
+msgid "Added 3 Iranian mirrors."
+msgstr "۳ آینه ایرانی اضافه شد."
 
 #: src/main.rs
 msgid "Added repository:"
@@ -49,15 +49,31 @@ msgstr "قدمت"
 
 #: src/main.rs
 msgid "ArchLinuxCN"
-msgstr ""
+msgstr "ArchLinuxCN"
 
 #: src/main.rs
 msgid "Availability"
 msgstr "دسترسی"
 
 #: src/main.rs
+msgid "Backup"
+msgstr "پشتیبان‌گیری"
+
+#: src/main.rs
+msgid "Backup Failed"
+msgstr "پشتیبان‌گیری ناموفق"
+
+#: src/main.rs
+msgid "Backup mirrorlist with timestamp"
+msgstr "پشتیبان‌گیری از فهرست آینه با زمان‌مهر"
+
+#: src/main.rs
+msgid "Backing Up"
+msgstr "در حال پشتیبان‌گیری"
+
+#: src/main.rs
 msgid "BlackArch"
-msgstr ""
+msgstr "BlackArch"
 
 #: src/main.rs
 msgid "Cache Clean Failed"
@@ -69,7 +85,7 @@ msgstr "انصراف"
 
 #: src/main.rs
 msgid "Chaotic-AUR"
-msgstr ""
+msgstr "Chaotic-AUR"
 
 #: src/main.rs
 msgid "Checking availability..."
@@ -97,15 +113,27 @@ msgstr "پیکربندی معیارهای انتخاب آینه"
 
 #: src/main.rs
 msgid "Configure your filters and click 'Fetch' to load available mirrors"
-msgstr "فیلترهای خود را تنظیم کرده و روی «دریافت» کلیک کنید تا آینه‌های موجود بارگذاری شوند"
+msgstr "صافی‌های خود را تنظیم کرده و روی «دریافت» کلیک کنید تا آینه‌های موجود بارگذاری شوند"
+
+#: src/main.rs
+msgid "Copied!"
+msgstr "رونوشت گرفته شد"
+
+#: src/main.rs
+msgid "Copy mirror configuration to clipboard"
+msgstr "رونوشت تنظیمات آینه در بریده‌دان"
 
 #: src/main.rs
 msgid "Copyright 2026 Parch GNU/Linux Team"
-msgstr "حق نشر ۲۰۲۶ تیم گنو/لینوکس پارچ"
+msgstr "حق نشر ۲۰۲۶ تیم پارچ گنو/لینوکس"
 
 #: src/main.rs
 msgid "Country"
 msgstr "کشور"
+
+#: src/main.rs
+msgid "Creating timestamped backup of mirrorlist..."
+msgstr "در حال ایجاد پشتیبان زمان‌مهر از فهرست آینه..."
 
 #: src/main.rs
 msgid "Disable"
@@ -153,11 +181,11 @@ msgstr "در حال دریافت آینه‌ها..."
 
 #: src/main.rs
 msgid "IPv4"
-msgstr ""
+msgstr "IPv4"
 
 #: src/main.rs
 msgid "IPv6"
-msgstr ""
+msgstr "IPv6"
 
 #: src/main.rs
 msgid "IP Version"
@@ -173,7 +201,15 @@ msgstr "آینه‌های قطع اینترنت ایران اضافه شد"
 
 #: src/main.rs
 msgid "Mirror Filters"
-msgstr "فیلترهای آینه"
+msgstr "صافی‌های آینه"
+
+#: src/main.rs
+msgid "Mirror configuration copied to clipboard"
+msgstr "تنظیمات آینه در بریده‌دان رونوشت گرفته شد"
+
+#: src/main.rs
+msgid "Mirrorlist backup created successfully"
+msgstr "پشتیبان فهرست آینه با موفقیت ایجاد شد"
 
 #: src/main.rs
 msgid "Mirrorlist saved and repositories synced successfully"
@@ -188,12 +224,20 @@ msgid "No Mirrors Loaded"
 msgstr "هیچ آینه‌ای بارگذاری نشده"
 
 #: src/main.rs
+msgid "No mirrors configured yet"
+msgstr "هنوز آینه‌ای پیکربندی نشده"
+
+#: src/main.rs
 msgid "No Protocols"
 msgstr "بدون پروتکل"
 
 #: src/main.rs
 msgid "Not tested"
 msgstr "آزمایش نشده"
+
+#: src/main.rs
+msgid "Nothing to Share"
+msgstr "چیزی برای اشتراک‌گذاری وجود ندارد"
 
 #: src/main.rs
 msgid "OK"
@@ -209,7 +253,7 @@ msgstr "تنظیمات Pacman"
 
 #: src/main.rs
 msgid "Parch GNU/Linux Team"
-msgstr "تیم گنو/لینوکس پارچ"
+msgstr "تیم پارچ گنو/لینوکس"
 
 #: src/main.rs
 msgid "Parch Repository Manager"
@@ -229,7 +273,7 @@ msgstr "به‌روزرسانی آینه‌ها"
 
 #: src/main.rs
 msgid "Removing old package files from cache..."
-msgstr "در حال حذف فایل‌های قدیمی بسته از حافظه نهان..."
+msgstr "در حال حذف پرونده‌های قدیمی بسته از حافظه نهان..."
 
 #: src/main.rs
 msgid "Repositories"
@@ -264,8 +308,16 @@ msgid "Server URL (e.g. https://mirror.example.com/archlinux/$repo/os/$arch)"
 msgstr "آدرس سرور (مثلاً https://mirror.example.com/archlinux/$repo/os/$arch)"
 
 #: src/main.rs
+msgid "Share"
+msgstr "اشتراک‌گذاری"
+
+#: src/main.rs
 msgid "Show only synchronized mirrors"
 msgstr "فقط آینه‌های همگام‌سازی‌شده را نشان بده"
+
+#: src/main.rs
+msgid "SigLevel"
+msgstr "SigLevel"
 
 #: src/main.rs
 msgid "Sort by:"
@@ -309,7 +361,7 @@ msgstr "مخازن شخص ثالث"
 
 #: src/main.rs
 msgid "This will update all system packages. Continue?"
-msgstr "این کار همه بسته‌های سیستم را به‌روزرسانی می‌کند. ادامه می‌دهید؟"
+msgstr "این کار همه بسته‌های سامانه را به‌روزرسانی می‌کند. ادامه می‌دهید؟"
 
 #: src/main.rs
 msgid "Total mirrors:"
@@ -325,15 +377,32 @@ msgstr "به‌روزرسانی"
 
 #: src/main.rs
 msgid "Update all system packages"
-msgstr "به‌روزرسانی همه بسته‌های سیستم"
+msgstr "به‌روزرسانی همه بسته‌های سامانه"
 
 #: src/main.rs
 msgid "Update System?"
-msgstr "به‌روزرسانی سیستم؟"
+msgstr "به‌روزرسانی سامانه؟"
 
 #: src/main.rs
 msgid "Up-to-date only"
 msgstr "فقط به‌روزها"
+
+#: src/main.rs
+msgid ""
+"<p>Version 0.4 (2026)</p>\n"
+"<ul>\n"
+"<li>SigLevel dropdown in Add Repository dialog</li>\n"
+"<li>Mirrorlist backup with timestamp button</li>\n"
+"<li>Share/copy mirror configuration to clipboard</li>\n"
+"<li>BlackArch strap.sh SHA1 verification</li>\n"
+"<li>ArchLinuxCN keyring auto-install</li>\n"
+"<li>SigLevel support in custom and third-party repos</li>\n"
+"<li>Fixed dead Iranian mirrors removal</li>\n"
+"<li>Fixed third-party repo detection and toggle</li>\n"
+"<li>Fixed multilib Include lines on re-enable</li>\n"
+"<li>Updated Persian translations</li>\n"
+"</ul>"
+msgstr ""
 
 #: src/pacman_settings.rs
 msgid "Architecture"
@@ -417,11 +486,11 @@ msgstr "تنظیمات با موفقیت ذخیره شد."
 
 #: src/pacman_settings.rs
 msgid "Space-separated files to protect from upgrade"
-msgstr "فایل‌های جدا شده با فاصله برای محافظت از به‌روزرسانی"
+msgstr "پرونده‌های جدا شده با فاصله برای محافظت از به‌روزرسانی"
 
 #: src/pacman_settings.rs
 msgid "Space-separated files to skip during extraction"
-msgstr "فایل‌های جدا شده با فاصله برای رد شدن در هنگام استخراج"
+msgstr "پرونده‌های جدا شده با فاصله برای رد شدن در هنگام استخراج"
 
 #: src/pacman_settings.rs
 msgid "Space-separated packages to hold during upgrades"
@@ -441,12 +510,12 @@ msgstr "همگام‌سازی اولیه"
 
 #: src/pacman_settings.rs
 msgid "System architecture"
-msgstr "معماری سیستم"
+msgstr "معماری سامانه"
 
 #: src/pacman_settings.rs
 msgid "x86_64"
-msgstr ""
+msgstr "x86_64"
 
 #: src/pacman_settings.rs
 msgid "x86_64_v3"
-msgstr ""
+msgstr "x86_64_v3"

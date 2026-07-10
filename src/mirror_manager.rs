@@ -46,13 +46,11 @@ struct ApiMirror {
 }
 
 const API_URL: &str = "https://archlinux.org/mirrors/status/json/";
-const USER_AGENT: &str = "mirrorman/0.3";
+const USER_AGENT: &str = "mirrorman/0.4";
 const MIRRORLIST_FILE: &str = "/etc/pacman.d/mirrorlist";
 const MIRRORLIST_BACKUP: &str = "/etc/pacman.d/mirrorlist.backup";
 
 const IRANIAN_MIRRORS: &[&str] = &[
-    "https://mirror.0-1.cloud/archlinux/$repo/os/$arch",
-    "https://mirror.kernel.ir/archlinux/$repo/os/$arch",
     "https://mirror.mobinhost.com/archlinux/$repo/os/$arch",
     "http://repo.iut.ac.ir/repo/archlinux/$repo/os/$arch",
     "https://mirror.arvancloud.ir/archlinux/$repo/os/$arch",

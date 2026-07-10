@@ -7,7 +7,7 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: mirrorman 0.3\n"
+"Project-Id-Version: mirrorman 0.4\n"
 "Report-Msgid-Bugs-To: https://github.com/parchlinux/mirrorman\n"
 "POT-Creation-Date: 2026-07-10 00:00+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
@@ -27,7 +27,7 @@ msgid "Add"
 msgstr ""
 
 #: src/main.rs
-msgid "Added 5 Iranian mirrors."
+msgid "Added 3 Iranian mirrors."
 msgstr ""
 
 #: src/main.rs
@@ -52,6 +52,22 @@ msgstr ""
 
 #: src/main.rs
 msgid "Availability"
+msgstr ""
+
+#: src/main.rs
+msgid "Backup"
+msgstr ""
+
+#: src/main.rs
+msgid "Backup Failed"
+msgstr ""
+
+#: src/main.rs
+msgid "Backup mirrorlist with timestamp"
+msgstr ""
+
+#: src/main.rs
+msgid "Backing Up"
 msgstr ""
 
 #: src/main.rs
@@ -99,11 +115,23 @@ msgid "Configure your filters and click 'Fetch' to load available mirrors"
 msgstr ""
 
 #: src/main.rs
+msgid "Copied!"
+msgstr ""
+
+#: src/main.rs
+msgid "Copy mirror configuration to clipboard"
+msgstr ""
+
+#: src/main.rs
 msgid "Copyright 2026 Parch GNU/Linux Team"
 msgstr ""
 
 #: src/main.rs
 msgid "Country"
+msgstr ""
+
+#: src/main.rs
+msgid "Creating timestamped backup of mirrorlist..."
 msgstr ""
 
 #: src/main.rs
@@ -175,6 +203,14 @@ msgid "Mirror Filters"
 msgstr ""
 
 #: src/main.rs
+msgid "Mirror configuration copied to clipboard"
+msgstr ""
+
+#: src/main.rs
+msgid "Mirrorlist backup created successfully"
+msgstr ""
+
+#: src/main.rs
 msgid "Mirrorlist saved and repositories synced successfully"
 msgstr ""
 
@@ -187,11 +223,19 @@ msgid "No Mirrors Loaded"
 msgstr ""
 
 #: src/main.rs
+msgid "No mirrors configured yet"
+msgstr ""
+
+#: src/main.rs
 msgid "No Protocols"
 msgstr ""
 
 #: src/main.rs
 msgid "Not tested"
+msgstr ""
+
+#: src/main.rs
+msgid "Nothing to Share"
 msgstr ""
 
 #: src/main.rs
@@ -263,7 +307,15 @@ msgid "Server URL (e.g. https://mirror.example.com/archlinux/$repo/os/$arch)"
 msgstr ""
 
 #: src/main.rs
+msgid "Share"
+msgstr ""
+
+#: src/main.rs
 msgid "Show only synchronized mirrors"
+msgstr ""
+
+#: src/main.rs
+msgid "SigLevel"
 msgstr ""
 
 #: src/main.rs
@@ -332,6 +384,23 @@ msgstr ""
 
 #: src/main.rs
 msgid "Up-to-date only"
+msgstr ""
+
+#: src/main.rs
+msgid ""
+"<p>Version 0.4 (2026)</p>\n"
+"<ul>\n"
+"<li>SigLevel dropdown in Add Repository dialog</li>\n"
+"<li>Mirrorlist backup with timestamp button</li>\n"
+"<li>Share/copy mirror configuration to clipboard</li>\n"
+"<li>BlackArch strap.sh SHA1 verification</li>\n"
+"<li>ArchLinuxCN keyring auto-install</li>\n"
+"<li>SigLevel support in custom and third-party repos</li>\n"
+"<li>Fixed dead Iranian mirrors removal</li>\n"
+"<li>Fixed third-party repo detection and toggle</li>\n"
+"<li>Fixed multilib Include lines on re-enable</li>\n"
+"<li>Updated Persian translations</li>\n"
+"</ul>"
 msgstr ""
 
 #: src/pacman_settings.rs
