@@ -1148,13 +1148,17 @@ fn build_ui(app: &adw::Application) {
             a.set_transient_for(Some(&win));
             a.set_application_name(tr!("Parch Repository Manager"));
             a.set_application_icon("com.parchlinux.mirrorman");
-            a.set_version("0.4");
+            a.set_version("0.4.1");
             a.set_developer_name(tr!("Parch GNU/Linux Team"));
             a.set_website("https://parchlinux.com");
             a.set_copyright(tr!("Copyright 2026 Parch GNU/Linux Team"));
             a.set_license_type(gtk4::License::Gpl30);
             a.set_release_notes(tr!(
-"<p>Version 0.4 (2026)</p>
+"<p>Version 0.4.1 (2026)</p>
+<ul>
+<li>Fixed missing slash in mirrorlist causing all mirrors to return HTTP 404</li>
+</ul>
+<p>Version 0.4 (2026)</p>
 <ul>
 <li>SigLevel dropdown in Add Repository dialog</li>
 <li>Mirrorlist backup with timestamp button</li>

@@ -46,7 +46,7 @@ struct ApiMirror {
 }
 
 const API_URL: &str = "https://archlinux.org/mirrors/status/json/";
-const USER_AGENT: &str = "mirrorman/0.4";
+const USER_AGENT: &str = "mirrorman/0.4.1";
 const MIRRORLIST_FILE: &str = "/etc/pacman.d/mirrorlist";
 const MIRRORLIST_BACKUP: &str = "/etc/pacman.d/mirrorlist.backup";
 
@@ -424,7 +424,7 @@ impl MirrorManager {
 
         for mirror in &self.mirrors {
             if mirror.enabled {
-                let url = format!("{}$repo/os/$arch", mirror.url.trim_end_matches('/'));
+                let url = format!("{}/$repo/os/$arch", mirror.url.trim_end_matches('/'));
                 s.push_str(&format!("Server = {url}\n"));
             }
         }

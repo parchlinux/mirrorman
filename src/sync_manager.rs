@@ -34,7 +34,7 @@ impl SyncManager {
         s.push_str(&format!("## {enabled_count} enabled mirror(s)\n\n"));
         for mirror in mirrors {
             if mirror.enabled {
-                let url = format!("{}$repo/os/$arch", mirror.url.trim_end_matches('/'));
+                let url = format!("{}/$repo/os/$arch", mirror.url.trim_end_matches('/'));
                 s.push_str(&format!("Server = {url}\n"));
             }
         }
