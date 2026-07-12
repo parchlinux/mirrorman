@@ -5,6 +5,12 @@ All notable changes to MirrorMan will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2026-07-12
+
+### Fixed
+- Enable/disable mirror button freezing the application (deadlock on re-entrant mutex during UI rebuild)
+- Mirrors that fail availability test are now disabled by default
+
 ## [0.4.1] - 2026-07-12
 
 ### Fixed

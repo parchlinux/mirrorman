@@ -769,11 +769,13 @@ fn build_ui(app: &adw::Application) {
         let list = mirror_list.clone();
         let sel = sel_idx.clone();
         enable_btn.connect_clicked(move |_| {
-            if let Some(idx) = *sel.lock().unwrap() {
-                let mut mgr = mm.lock().unwrap();
-                if idx < mgr.mirrors.len() {
-                    mgr.mirrors[idx].enabled = true;
-                    refresh_list_ui(&list, &mgr.mirrors);
+            let idx = *sel.lock().unwrap();
+            if let Some(idx) = idx {
+                if let Ok(mut mgr) = mm.try_lock() {
+                    if idx < mgr.mirrors.len() {
+                        mgr.mirrors[idx].enabled = true;
+                        refresh_list_ui(&list, &mgr.mirrors);
+                    }
                 }
             }
         });
@@ -783,11 +785,13 @@ fn build_ui(app: &adw::Application) {
         let list = mirror_list.clone();
         let sel = sel_idx.clone();
         disable_btn.connect_clicked(move |_| {
-            if let Some(idx) = *sel.lock().unwrap() {
-                let mut mgr = mm.lock().unwrap();
-                if idx < mgr.mirrors.len() {
-                    mgr.mirrors[idx].enabled = false;
-                    refresh_list_ui(&list, &mgr.mirrors);
+            let idx = *sel.lock().unwrap();
+            if let Some(idx) = idx {
+                if let Ok(mut mgr) = mm.try_lock() {
+                    if idx < mgr.mirrors.len() {
+                        mgr.mirrors[idx].enabled = false;
+                        refresh_list_ui(&list, &mgr.mirrors);
+                    }
                 }
             }
         });
@@ -807,27 +811,30 @@ fn build_ui(app: &adw::Application) {
         let mm = mm.clone();
         let list = mirror_list.clone();
         sort_speed_btn.connect_clicked(move |_| {
-            let mut mgr = mm.lock().unwrap();
-            mgr.sort_by_speed();
-            refresh_list_ui(&list, &mgr.mirrors);
+            if let Ok(mut mgr) = mm.try_lock() {
+                mgr.sort_by_speed();
+                refresh_list_ui(&list, &mgr.mirrors);
+            }
         });
     }
     {
         let mm = mm.clone();
         let list = mirror_list.clone();
         sort_country_btn.connect_clicked(move |_| {
-            let mut mgr = mm.lock().unwrap();
-            mgr.sort_by_country();
-            refresh_list_ui(&list, &mgr.mirrors);
+            if let Ok(mut mgr) = mm.try_lock() {
+                mgr.sort_by_country();
+                refresh_list_ui(&list, &mgr.mirrors);
+            }
         });
     }
     {
         let mm = mm.clone();
         let list = mirror_list.clone();
         sort_age_btn.connect_clicked(move |_| {
-            let mut mgr = mm.lock().unwrap();
-            mgr.sort_by_age();
-            refresh_list_ui(&list, &mgr.mirrors);
+            if let Ok(mut mgr) = mm.try_lock() {
+                mgr.sort_by_age();
+                refresh_list_ui(&list, &mgr.mirrors);
+            }
         });
     }
 
@@ -1148,13 +1155,18 @@ fn build_ui(app: &adw::Application) {
             a.set_transient_for(Some(&win));
             a.set_application_name(tr!("Parch Repository Manager"));
             a.set_application_icon("com.parchlinux.mirrorman");
-            a.set_version("0.4.1");
+            a.set_version("0.4.2");
             a.set_developer_name(tr!("Parch GNU/Linux Team"));
             a.set_website("https://parchlinux.com");
             a.set_copyright(tr!("Copyright 2026 Parch GNU/Linux Team"));
             a.set_license_type(gtk4::License::Gpl30);
             a.set_release_notes(tr!(
-"<p>Version 0.4.1 (2026)</p>
+"<p>Version 0.4.2 (2026)</p>
+<ul>
+<li>Fixed enable/disable mirror button freezing the application (deadlock in mutex)</li>
+<li>Mirrors that fail availability test are now disabled by default</li>
+</ul>
+<p>Version 0.4.1 (2026)</p>
 <ul>
 <li>Fixed missing slash in mirrorlist causing all mirrors to return HTTP 404</li>
 </ul>

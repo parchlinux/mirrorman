@@ -46,7 +46,7 @@ struct ApiMirror {
 }
 
 const API_URL: &str = "https://archlinux.org/mirrors/status/json/";
-const USER_AGENT: &str = "mirrorman/0.4.1";
+const USER_AGENT: &str = "mirrorman/0.4.2";
 const MIRRORLIST_FILE: &str = "/etc/pacman.d/mirrorlist";
 const MIRRORLIST_BACKUP: &str = "/etc/pacman.d/mirrorlist.backup";
 
@@ -327,6 +327,9 @@ impl MirrorManager {
         for &(idx, speed) in final_results.iter() {
             if idx < mirrors.len() {
                 mirrors[idx].speed = speed;
+                if speed.is_none() {
+                    mirrors[idx].enabled = false;
+                }
             }
         }
     }
