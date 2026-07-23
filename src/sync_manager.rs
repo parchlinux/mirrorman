@@ -1,5 +1,3 @@
-use std::process::Command;
-
 pub struct SyncManager;
 
 impl SyncManager {
@@ -13,15 +11,15 @@ impl SyncManager {
 
     pub fn backup_mirrorlist() -> Result<String, String> {
         let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-        let backup_path = format!("/etc/pacman.d/mirrorlist.backup.{timestamp}");
-        let status = Command::new("pkexec")
-            .args(["cp", "/etc/pacman.d/mirrorlist", &backup_path])
-            .status()
-            .map_err(|e| format!("Failed to execute pkexec: {e}"))?;
-        if status.success() {
+        let backup_path = format!("{}.{timestamp}", crate::mirror_manager::MIRRORLIST_BACKUP);
+        let (success, _, stderr) = crate::helper_client::HelperClient::run_command(
+            "cp",
+            &["/etc/pacman.d/mirrorlist", &backup_path],
+        )?;
+        if success {
             Ok(backup_path)
         } else {
-            Err("pkexec failed to backup mirrorlist".to_string())
+            Err(format!("Failed to backup mirrorlist: {stderr}"))
         }
     }
 
@@ -42,18 +40,59 @@ impl SyncManager {
     }
 
     fn run_pacman(args: &[&str], label: &str) -> Result<String, String> {
-        let output = Command::new("pkexec")
-            .args(["pacman"])
-            .args(args)
-            .output()
-            .map_err(|e| format!("Failed to execute pacman: {e}"))?;
-
-        if output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let (success, stdout, stderr) = crate::helper_client::HelperClient::run_pacman(args)?;
+        if success {
             Ok(stdout)
         } else {
-            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
             Err(format!("Failed to {label}:\n{stderr}"))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mirror_manager::Mirror;
+
+    #[test]
+    fn test_generate_share_content() {
+        let mirrors = vec![
+            Mirror {
+                url: "https://mirror.parchlinux.ir/".to_string(),
+                country: "Iran".to_string(),
+                country_code: "IR".to_string(),
+                protocol: "https".to_string(),
+                speed: Some(10.0),
+                last_sync: None,
+                enabled: true,
+                ipv4: true,
+                ipv6: false,
+                completion_pct: None,
+                score: None,
+                duration_avg: None,
+                duration_stddev: None,
+            },
+            Mirror {
+                url: "https://mirror.de/".to_string(),
+                country: "Germany".to_string(),
+                country_code: "DE".to_string(),
+                protocol: "https".to_string(),
+                speed: Some(50.0),
+                last_sync: None,
+                enabled: false,
+                ipv4: true,
+                ipv6: false,
+                completion_pct: None,
+                score: None,
+                duration_avg: None,
+                duration_stddev: None,
+            },
+        ];
+
+        let shared = SyncManager::generate_share_content(&mirrors);
+        assert!(shared.contains("## Parch Mirror Configuration"));
+        assert!(shared.contains("## 1 enabled mirror(s)"));
+        assert!(shared.contains("Server = https://mirror.parchlinux.ir/$repo/os/$arch"));
+        assert!(!shared.contains("mirror.de"));
     }
 }

@@ -1,5 +1,5 @@
+use crate::tr;
 use adw::prelude::*;
-use adw::ResponseAppearance;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -84,19 +84,15 @@ impl PacmanConfig {
     }
 }
 
-pub fn show_settings_window(parent: &adw::ApplicationWindow) {
+pub fn show_settings_sheet(bottom_sheet: &adw::BottomSheet) {
     let config = Arc::new(Mutex::new(PacmanConfig::load()));
 
-    let win = adw::Window::new();
-    win.set_transient_for(Some(parent));
-    win.set_modal(true);
-    win.set_title(Some(tr!("Pacman Options")));
-    win.set_default_size(600, 600);
-
     let toolbar_view = adw::ToolbarView::new();
-    win.set_content(Some(&toolbar_view));
 
     let header = adw::HeaderBar::new();
+    let title_label = gtk4::Label::new(Some(tr!("Pacman Options")));
+    title_label.add_css_class("title");
+    header.set_title_widget(Some(&title_label));
     toolbar_view.add_top_bar(&header);
 
     let save_btn = gtk4::Button::with_label(tr!("Save"));
@@ -105,14 +101,17 @@ pub fn show_settings_window(parent: &adw::ApplicationWindow) {
 
     let cancel_btn = gtk4::Button::with_label(tr!("Cancel"));
     {
-        let win = win.clone();
-        cancel_btn.connect_clicked(move |_| win.destroy());
+        let bottom_sheet = bottom_sheet.clone();
+        cancel_btn.connect_clicked(move |_| {
+            bottom_sheet.set_open(false);
+        });
     }
     header.pack_start(&cancel_btn);
 
     let scroll = gtk4::ScrolledWindow::new();
     scroll.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::Automatic);
     scroll.set_vexpand(true);
+    scroll.set_propagate_natural_height(true);
     toolbar_view.set_content(Some(&scroll));
 
     let box_ = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
@@ -216,11 +215,41 @@ pub fn show_settings_window(parent: &adw::ApplicationWindow) {
     });
     group.add(&arch_row);
 
+    let auto_group = adw::PreferencesGroup::new();
+    auto_group.set_title(tr!("Auto Refresh Timer"));
+    auto_group.set_description(Some(tr!("Automatically update mirrorlist on a systemd timer schedule")));
+    box_.append(&auto_group);
+
+    let auto_row = adw::ActionRow::new();
+    auto_row.set_title(tr!("Enable Auto Refresh"));
+    auto_row.set_subtitle(tr!("Run systemd background timer unit (mirrorman-refresh.timer)"));
+    let auto_switch = gtk4::Switch::new();
+    auto_switch.set_valign(gtk4::Align::Center);
+    let timer_active = std::process::Command::new("systemctl")
+        .args(["--user", "is-active", "mirrorman-refresh.timer"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "active")
+        .unwrap_or(false);
+    auto_switch.set_active(timer_active);
+    auto_row.add_suffix(&auto_switch);
+    auto_row.set_activatable_widget(Some(&auto_switch));
+    auto_group.add(&auto_row);
+
     drop(cfg);
 
     let cfg_clone = config.clone();
-    let win_save = win.clone();
+    let bottom_sheet_save = bottom_sheet.clone();
     save_btn.connect_clicked(move |_| {
+        if auto_switch.is_active() {
+            let _ = std::process::Command::new("systemctl")
+                .args(["--user", "enable", "--now", "mirrorman-refresh.timer"])
+                .status();
+        } else {
+            let _ = std::process::Command::new("systemctl")
+                .args(["--user", "disable", "--now", "mirrorman-refresh.timer"])
+                .status();
+        }
+
         let mut cfg = cfg_clone.lock().unwrap();
         cfg.ignore_pkg = ignore_entry.text().split_whitespace().map(|s| s.to_string()).collect();
         cfg.hold_pkg = hold_entry.text().split_whitespace().map(|s| s.to_string()).collect();
@@ -237,26 +266,15 @@ pub fn show_settings_window(parent: &adw::ApplicationWindow) {
             _ => "auto".to_string(),
         };
 
-        match save_pacman_config(&cfg) {
-            Ok(()) => {
-                let d = adw::AlertDialog::new(Some(tr!("Success")), Some(tr!("Settings saved successfully.")));
-                d.add_response("ok", tr!("OK"));
-                d.present(Some(&win_save));
-            }
-            Err(e) => {
-                let d = adw::AlertDialog::new(Some(tr!("Error")), Some(&e));
-                d.add_response("ok", tr!("OK"));
-                d.set_response_appearance("ok", ResponseAppearance::Destructive);
-                d.present(Some(&win_save));
-            }
-        }
+        let _ = save_pacman_config(&cfg);
+        bottom_sheet_save.set_open(false);
     });
 
-    win.present();
+    bottom_sheet.set_sheet(Some(&toolbar_view));
+    bottom_sheet.set_open(true);
 }
 
 fn save_pacman_config(cfg: &PacmanConfig) -> Result<(), String> {
-    use std::io::Write;
 
     let content = std::fs::read_to_string(PACMAN_CONF)
         .map_err(|e| format!("Failed to read pacman.conf: {e}"))?;
@@ -335,27 +353,7 @@ fn save_pacman_config(cfg: &PacmanConfig) -> Result<(), String> {
     }
 
     let result = new_lines.join("\n") + "\n";
-
-    let temp_path = "/tmp/mirrorman_pacman_settings";
-    {
-        let mut f = std::fs::File::create(temp_path)
-            .map_err(|e| format!("Failed to create temp file: {e}"))?;
-        f.write_all(result.as_bytes())
-            .map_err(|e| format!("Failed to write settings: {e}"))?;
-    }
-
-    let status = std::process::Command::new("pkexec")
-        .args(["cp", temp_path, PACMAN_CONF])
-        .status()
-        .map_err(|e| format!("Failed to execute pkexec: {e}"))?;
-
-    if !status.success() {
-        let _ = std::fs::remove_file(temp_path);
-        return Err("pkexec failed to copy config".to_string());
-    }
-
-    let _ = std::fs::remove_file(temp_path);
-    Ok(())
+    crate::helper_client::HelperClient::save_pacman_conf(&result)
 }
 
 fn line_key(line: &str) -> String {

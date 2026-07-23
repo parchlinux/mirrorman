@@ -70,7 +70,6 @@ impl RepoConfig {
         enable: bool,
         is_third_party: bool,
     ) -> Result<(), String> {
-        use std::io::Write;
 
         let config_text =
             std::fs::read_to_string(self.pacman_conf).map_err(|e| format!("Failed to read pacman.conf: {e}"))?;
@@ -82,34 +81,13 @@ impl RepoConfig {
         };
 
         let modified = toggle_repo_text(&config_text, repo_name, enable, section_snippet.as_deref());
-
-        let temp_path = "/tmp/mirrorman_pacman_conf";
-        {
-            let mut f =
-                std::fs::File::create(temp_path).map_err(|e| format!("Failed to create temp file: {e}"))?;
-            f.write_all(modified.as_bytes())
-                .map_err(|e| format!("Failed to write config: {e}"))?;
-        }
-
-        let status = std::process::Command::new("pkexec")
-            .args(["cp", temp_path, self.pacman_conf])
-            .status()
-            .map_err(|e| format!("Failed to execute pkexec: {e}"))?;
-
-        if !status.success() {
-            let _ = std::fs::remove_file(temp_path);
-            return Err("pkexec failed to copy config".to_string());
-        }
-
-        let _ = std::fs::remove_file(temp_path);
+        crate::helper_client::HelperClient::save_pacman_conf(&modified)?;
 
         self.repositories.insert(repo_name.to_string(), enable);
         Ok(())
     }
 
     pub fn add_repository(&mut self, repo_name: &str, repo_url: &str, siglevel: &str) -> Result<(), String> {
-        use std::io::Write;
-
         if repo_name.is_empty() || repo_url.is_empty() {
             return Err("Repository name and URL are required".to_string());
         }
@@ -129,26 +107,7 @@ impl RepoConfig {
             format!("SigLevel = {siglevel}\n")
         };
         let modified = format!("{config_text}\n[{repo_name}]\nServer = {repo_url}\n{sig_line}");
-
-        let temp_path = "/tmp/mirrorman_pacman_conf";
-        {
-            let mut f =
-                std::fs::File::create(temp_path).map_err(|e| format!("Failed to create temp file: {e}"))?;
-            f.write_all(modified.as_bytes())
-                .map_err(|e| format!("Failed to write config: {e}"))?;
-        }
-
-        let status = std::process::Command::new("pkexec")
-            .args(["cp", temp_path, self.pacman_conf])
-            .status()
-            .map_err(|e| format!("Failed to execute pkexec: {e}"))?;
-
-        if !status.success() {
-            let _ = std::fs::remove_file(temp_path);
-            return Err("pkexec failed to copy config".to_string());
-        }
-
-        let _ = std::fs::remove_file(temp_path);
+        crate::helper_client::HelperClient::save_pacman_conf(&modified)?;
 
         self.repositories.insert(repo_name.to_string(), true);
         self.custom_repos.push(repo_name.to_string());
@@ -250,47 +209,71 @@ fn get_third_party_section(repo_name: &str) -> Option<String> {
 }
 
 fn enable_chaotic_aur() -> Result<(), String> {
-    run_cmd(&[
-        "pkexec",
+    run_cmd(
         "pacman-key",
-        "--recv-key",
-        "3056513887B78AEB",
-        "--keyserver",
-        "keyserver.ubuntu.com",
-    ])?;
-    run_cmd(&["pkexec", "pacman-key", "--lsign-key", "3056513887B78AEB"])?;
-    run_cmd(&[
-        "pkexec",
+        &[
+            "--recv-key",
+            "3056513887B78AEB",
+            "--keyserver",
+            "keyserver.ubuntu.com",
+        ],
+    )?;
+    run_cmd("pacman-key", &["--lsign-key", "3056513887B78AEB"])?;
+    run_cmd(
         "pacman",
-        "-U",
-        "--noconfirm",
-        "https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst",
-        "https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst",
-    ])?;
+        &[
+            "-U",
+            "--noconfirm",
+            "https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst",
+            "https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst",
+        ],
+    )?;
     Ok(())
 }
 
 fn enable_blackarch() -> Result<(), String> {
-    run_cmd(&["pkexec", "bash", "-c", "cd /tmp && curl -O https://blackarch.org/strap.sh && echo '26849980b35a42e6e192c6d9ed8c46f0d6d06047  strap.sh' | sha1sum -c && chmod +x strap.sh && ./strap.sh && rm -f strap.sh"])?;
+    run_cmd(
+        "bash",
+        &[
+            "-c",
+            "cd /tmp && curl -O https://blackarch.org/strap.sh && echo '26849980b35a42e6e192c6d9ed8c46f0d6d06047  strap.sh' | sha1sum -c && chmod +x strap.sh && ./strap.sh && rm -f strap.sh",
+        ],
+    )?;
     Ok(())
 }
 
 fn enable_archlinuxcn() -> Result<(), String> {
-    run_cmd(&["pkexec", "pacman-key", "--recv-key", "4D41FD3D9E72E7966A573093E8CA6AEB220E236C", "--keyserver", "keyserver.ubuntu.com"])?;
-    run_cmd(&["pkexec", "pacman-key", "--lsign-key", "4D41FD3D9E72E7966A573093E8CA6AEB220E236C"])?;
-    run_cmd(&["pkexec", "pacman", "-S", "archlinuxcn-keyring", "--noconfirm"])?;
+    run_cmd(
+        "pacman-key",
+        &[
+            "--recv-key",
+            "4D41FD3D9E72E7966A573093E8CA6AEB220E236C",
+            "--keyserver",
+            "keyserver.ubuntu.com",
+        ],
+    )?;
+    run_cmd(
+        "pacman-key",
+        &["--lsign-key", "4D41FD3D9E72E7966A573093E8CA6AEB220E236C"],
+    )?;
+    run_cmd("pacman", &["-S", "archlinuxcn-keyring", "--noconfirm"])?;
     Ok(())
 }
 
-fn run_cmd(args: &[&str]) -> Result<(), String> {
-    let status = std::process::Command::new(args[0])
-        .args(&args[1..])
-        .status()
-        .map_err(|e| format!("Failed to execute command: {e}"))?;
-
-    if status.success() {
-        Ok(())
+fn run_cmd(command: &str, args: &[&str]) -> Result<(), String> {
+    if command == "pacman" {
+        let (success, _, stderr) = crate::helper_client::HelperClient::run_pacman(args)?;
+        if success {
+            Ok(())
+        } else {
+            Err(format!("pacman failed: {stderr}"))
+        }
     } else {
-        Err(format!("Command failed: {} {:?}", args[0], &args[1..]))
+        let (success, _, stderr) = crate::helper_client::HelperClient::run_command(command, args)?;
+        if success {
+            Ok(())
+        } else {
+            Err(format!("Command '{command}' failed: {stderr}"))
+        }
     }
 }

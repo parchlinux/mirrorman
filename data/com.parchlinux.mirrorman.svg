@@ -1,28 +1,43 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#2196F3"/>
-      <stop offset="1" stop-color="#1565C0"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0c1420"/>
+      <stop offset="1" stop-color="#122b3a"/>
     </linearGradient>
-    <linearGradient id="globe" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#E3F2FD"/>
-      <stop offset="1" stop-color="#BBDEFB"/>
+    <linearGradient id="mirror" x1="24" y1="104" x2="104" y2="20" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#00FF80"/>
+      <stop offset="0.35" stop-color="#00FF95"/>
+      <stop offset="0.62" stop-color="#00EAFF"/>
+      <stop offset="0.82" stop-color="#00A9FF"/>
+      <stop offset="1" stop-color="#0080FF"/>
     </linearGradient>
-    <linearGradient id="serv" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFB300"/>
-      <stop offset="1" stop-color="#FF8F00"/>
+    <linearGradient id="glassSheen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.5"/>
+      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="chevronGrad" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#00EAFF"/>
+      <stop offset="1" stop-color="#ffffff"/>
     </linearGradient>
   </defs>
-  <rect width="128" height="128" rx="28" fill="url(#bg)"/>
-  <circle cx="64" cy="56" r="32" fill="url(#globe)" opacity="0.95"/>
-  <ellipse cx="64" cy="56" rx="32" ry="12" fill="none" stroke="#1565C0" stroke-width="1.5" opacity="0.4"/>
-  <line x1="32" y1="56" x2="96" y2="56" stroke="#1565C0" stroke-width="1.5" opacity="0.4"/>
-  <ellipse cx="64" cy="56" rx="14" ry="32" fill="none" stroke="#1565C0" stroke-width="1.5" opacity="0.4"/>
-  <rect x="42" y="92" width="44" height="20" rx="4" fill="url(#serv)"/>
-  <rect x="46" y="96" width="8" height="4" rx="1" fill="#FFF" opacity="0.8"/>
-  <rect x="58" y="96" width="8" height="4" rx="1" fill="#FFF" opacity="0.8"/>
-  <rect x="70" y="96" width="8" height="4" rx="1" fill="#FFF" opacity="0.8"/>
-  <rect x="46" y="102" width="8" height="4" rx="1" fill="#FFF" opacity="0.8"/>
-  <rect x="58" y="102" width="8" height="4" rx="1" fill="#FFF" opacity="0.8"/>
-  <rect x="70" y="102" width="8" height="4" rx="1" fill="#FFF" opacity="0.8"/>
+
+  <!-- squircle background -->
+  <rect x="3" y="3" width="122" height="122" rx="42" fill="url(#bg)"/>
+  <rect x="3" y="3" width="122" height="122" rx="42" fill="none" stroke="#00EAFF" stroke-opacity="0.15" stroke-width="1"/>
+
+  <!-- speed / network pulse rings -->
+  <circle cx="27" cy="101" r="50" fill="none" stroke="#00EAFF" stroke-opacity="0.10" stroke-width="2"/>
+  <circle cx="27" cy="101" r="37" fill="none" stroke="#00EAFF" stroke-opacity="0.16" stroke-width="2"/>
+
+  <!-- angled mirror glass pane -->
+  <g transform="rotate(-16 64 64)">
+    <rect x="26" y="24" width="76" height="80" rx="16" fill="url(#mirror)"/>
+    <rect x="26" y="24" width="76" height="80" rx="16" fill="url(#glassSheen)"/>
+    <path d="M34 100 L56 26 L66 26 L44 100 Z" fill="#ffffff" fill-opacity="0.16"/>
+  </g>
+
+  <!-- reflected chevron (Parch/Arch mark) -->
+  <path d="M44 80 L64 44 L84 80" stroke="#0c1420" stroke-opacity="0.35" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M44 80 L64 44 L84 80" stroke="url(#chevronGrad)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
 </svg>

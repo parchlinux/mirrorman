@@ -98,5 +98,5 @@ pub fn tr(s: &'static str) -> &'static str {
 
 #[macro_export]
 macro_rules! tr {
-    ($s:expr) => { crate::i18n::tr($s) };
+    ($s:expr) => { $crate::i18n::tr($s) };
 }

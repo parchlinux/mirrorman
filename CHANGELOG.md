@@ -5,6 +5,29 @@ All notable changes to MirrorMan will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0-beta.1] - 2026-07-24
+
+### Added
+- **Mirror Health Dashboard**: Extended Arch API integration with score, completion percentage, and latency stddev metrics.
+- **One-Click Best Setup**: Intelligent multi-country mirror auto-selection algorithm prioritizing high-reliability servers.
+- **Privilege Separation Overhaul**: Replaced `pkexec` invocations with `mirrorman-helper` D-Bus system service (`com.parchlinux.mirrorman.Helper`) and systemd system unit (`mirrorman-helper.service`).
+- **Adaptive Libadwaita Layout**:
+  - `adw::OverlaySplitView` for responsive mobile screens (<600px width) with headerbar toggle button (`sidebar-show-symbolic`).
+  - `adw::BottomSheet` embedded drawer for Pacman Settings with drag handle and auto-opening sheet transition.
+- **Mirrorlist Diff Preview**: Interactive diff window (`show_diff_dialog`) comparing existing vs proposed mirrorlist before saving.
+- **Template Profile Manager**: Save, load, list, and delete custom mirrorlist profiles stored in `~/.config/mirrorman/templates/*.json`.
+- **Transaction History Log Viewer**: Integrated `/var/log/pacman.log` transaction viewer for package install, upgrade, and removal history.
+- **Auto Refresh Timer**: Background systemd timer integration (`mirrorman-refresh.timer` / `mirrorman-refresh.service`) and standalone `mirrorman-cli` binary.
+- **Automated Unit & Integration Test Suite**: 11 unit and integration tests covering mirror ranking, templates, log parsing, CLI, and D-Bus client security.
+
+### Changed
+- Refactored crate structure into a modular Rust library (`src/lib.rs`) sharing logic cleanly across binary targets.
+- Replaced deprecated `adw::AboutWindow` with `adw::AboutDialog`.
+- Updated Persian (`fa`) translation catalog with entries for all v0.5.0 features.
+
+### Security
+- Eliminated raw system shell invocation paths in favor of whitelisted D-Bus IPC methods.
+
 ## [0.4.2] - 2026-07-12
 
 ### Fixed

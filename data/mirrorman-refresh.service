@@ -1,0 +1,8 @@
+[Unit]
+Description=Mirrorman Auto Refresh Mirrors Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/mirrorman-cli --refresh --best-setup --save
