@@ -8,6 +8,7 @@ use mirrorman::templates;
 use mirrorman::tr;
 use mirrorman::utils;
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -17,6 +18,163 @@ use gtk4::glib;
 use mirror_manager::{country_flag, Mirror, MirrorManager};
 
 static APP_ID: &str = "com.parchlinux.mirrorman";
+
+// ── Multi-country filter helpers ──
+fn clear_country_flow(flow: &gtk4::FlowBox) {
+    while let Some(c) = flow.first_child() {
+        flow.remove(&c);
+    }
+}
+
+fn country_children(flow: &gtk4::FlowBox) -> Vec<gtk4::CheckButton> {
+    let mut out = Vec::new();
+    let mut child = flow.first_child();
+    while let Some(c) = child {
+        if let Ok(fbc) = c.clone().downcast::<gtk4::FlowBoxChild>() {
+            if let Some(btn) = fbc.child().and_then(|w| w.downcast::<gtk4::CheckButton>().ok()) {
+                out.push(btn);
+            }
+        }
+        child = c.next_sibling();
+    }
+    out
+}
+
+fn update_country_subtitle(row: &adw::ActionRow, flow: &gtk4::FlowBox) {
+    let sel = selected_countries(flow);
+    let text = if sel.is_empty() {
+        tr!("Worldwide").to_string()
+    } else {
+        sel.join(", ")
+    };
+    row.set_subtitle(&text);
+}
+
+fn add_country_worldwide_toggle(flow: &gtk4::FlowBox, row: &adw::ActionRow) -> gtk4::CheckButton {
+    let world = gtk4::CheckButton::with_label(tr!("Worldwide"));
+    world.set_active(true);
+    let flow_clone = flow.clone();
+    let row_clone = row.clone();
+    world.connect_toggled(move |b| {
+        if b.is_active() {
+            for btn in country_children(&flow_clone) {
+                if btn.label().as_deref() != Some(tr!("Worldwide")) && btn.is_active() {
+                    btn.set_active(false);
+                }
+            }
+            update_country_subtitle(&row_clone, &flow_clone);
+        }
+    });
+    flow.append(&world);
+    world
+}
+
+fn add_country_toggle(
+    flow: &gtk4::FlowBox,
+    worldwide: &gtk4::CheckButton,
+    row: &adw::ActionRow,
+    name: &str,
+) {
+    let btn = gtk4::CheckButton::with_label(name);
+    let flow_clone = flow.clone();
+    let worldwide_clone = worldwide.clone();
+    let row_clone = row.clone();
+    let name_owned = name.to_string();
+    btn.connect_toggled(move |b| {
+        if b.is_active() {
+            if name_owned != tr!("Worldwide") {
+                worldwide_clone.set_active(false);
+            }
+        } else if name_owned != tr!("Worldwide") {
+            let any = country_children(&flow_clone)
+                .iter()
+                .any(|btn| btn.label().as_deref() != Some(tr!("Worldwide")) && btn.is_active());
+            if !any {
+                worldwide_clone.set_active(true);
+            }
+        }
+        update_country_subtitle(&row_clone, &flow_clone);
+    });
+    flow.append(&btn);
+}
+
+fn selected_countries(flow: &gtk4::FlowBox) -> Vec<String> {
+    country_children(flow)
+        .iter()
+        .filter(|btn| btn.is_active() && btn.label().as_deref() != Some(tr!("Worldwide")))
+        .filter_map(|btn| btn.label().map(|l| l.to_string()))
+        .collect()
+}
+
+// ── Repository toggle helper ──
+// Long-running work (third-party keyring download, pacman.conf write via
+// D-Bus/pkexec) must not block the GTK main thread. The switch flips
+// immediately; the operation runs on a worker thread. Since GTK widgets are
+// not Send, results are marshalled back over the channel and handled by the
+// main-thread poll loop, which looks the switch up in `registry` to revert
+// and re-enable it on failure.
+#[derive(Clone)]
+struct SwitchState {
+    sw: gtk4::Switch,
+    busy: Arc<std::sync::atomic::AtomicBool>,
+}
+
+fn connect_repo_switch(
+    sw: &gtk4::Switch,
+    name: &str,
+    rc: Arc<Mutex<repo_config::RepoConfig>>,
+    tx: std::sync::mpsc::Sender<String>,
+    is_third: bool,
+    registry: &Arc<Mutex<HashMap<String, SwitchState>>>,
+) {
+    let busy = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    registry.lock().unwrap().insert(
+        name.to_string(),
+        SwitchState { sw: sw.clone(), busy: busy.clone() },
+    );
+
+    let registry_c = registry.clone();
+    let name_c = name.to_string();
+    sw.connect_state_set(move |_, active| {
+        let state = registry_c.lock().unwrap().get(&name_c).cloned();
+        let state = match state {
+            Some(s) => s,
+            None => return glib::Propagation::Proceed,
+        };
+        // Re-entry guard: programmatic state changes (revert / re-enable)
+        // must not start another operation.
+        if state.busy.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            return glib::Propagation::Proceed;
+        }
+        state.sw.set_sensitive(false);
+
+        let rc = rc.clone();
+        let tx = tx.clone();
+        let name = name_c.clone();
+        let active_c = active;
+        std::thread::spawn(move || {
+            let outcome: Result<(), String> = (|| {
+                if is_third && active_c {
+                    let cfg = rc.lock().unwrap();
+                    cfg.enable_third_party(&name)?;
+                }
+                let mut cfg = rc.lock().unwrap();
+                cfg.toggle_repo_in_config(&name, active_c, is_third)
+            })();
+
+            match outcome {
+                Ok(()) => {
+                    let _ = tx.send(format!("toggle_done:{name}"));
+                }
+                Err(e) => {
+                    let _ = tx.send(format!("toggle_fail:{name}:{}:{e}", !active_c));
+                }
+            }
+        });
+
+        glib::Propagation::Proceed
+    });
+}
 
 fn build_ui(app: &adw::Application) {
     let window = adw::ApplicationWindow::new(app);
@@ -28,6 +186,7 @@ fn build_ui(app: &adw::Application) {
     // ── Shared state ──
     let mm = Arc::new(Mutex::new(MirrorManager::new()));
     let rc = Arc::new(Mutex::new(repo_config::RepoConfig::new()));
+    let repo_switches: Arc<Mutex<HashMap<String, SwitchState>>> = Arc::new(Mutex::new(HashMap::new()));
 
     // ── Channel: background threads → main thread ──
     let (tx, rx) = std::sync::mpsc::channel::<String>();
@@ -93,14 +252,15 @@ fn build_ui(app: &adw::Application) {
         });
     }
 
-    let left_sidebar = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-    left_sidebar.add_css_class("sidebar");
-    split_view.set_sidebar(Some(&left_sidebar));
+    let nav_view = adw::NavigationView::new();
+    nav_view.add_css_class("sidebar");
+    split_view.set_sidebar(Some(&nav_view));
 
     let sidebar_scroll = gtk4::ScrolledWindow::new();
     sidebar_scroll.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::Automatic);
     sidebar_scroll.set_vexpand(true);
-    left_sidebar.append(&sidebar_scroll);
+    let main_page = adw::NavigationPage::new(&sidebar_scroll, tr!("Parch Repository Manager"));
+    nav_view.add(&main_page);
 
     let sidebar_box = gtk4::Box::new(gtk4::Orientation::Vertical, 18);
     sidebar_box.set_margin_top(18);
@@ -118,12 +278,51 @@ fn build_ui(app: &adw::Application) {
     filter_group.set_description(Some(tr!("Configure mirror selection criteria")));
     filter_clamp.set_child(Some(&filter_group));
 
-    let country_row = adw::ComboRow::new();
+    let country_row = adw::ActionRow::new();
     country_row.set_title(tr!("Country"));
-    let country_store = gtk4::StringList::new(&["Worldwide"]);
-    country_row.set_model(Some(&country_store));
-    country_row.set_selected(0);
+    country_row.set_subtitle(tr!("Worldwide"));
+    country_row.set_activatable(true);
     filter_group.add(&country_row);
+
+    let country_arrow = gtk4::Image::from_icon_name("go-next-symbolic");
+    country_row.add_suffix(&country_arrow);
+
+    let country_toolbar = adw::ToolbarView::new();
+    let country_header = adw::HeaderBar::new();
+    country_header.set_show_back_button(true);
+    country_header.set_show_title(false);
+    let done_btn = gtk4::Button::with_label(tr!("Done"));
+    done_btn.add_css_class("suggested-action");
+    country_header.pack_end(&done_btn);
+    country_toolbar.add_top_bar(&country_header);
+
+    let country_scroll = gtk4::ScrolledWindow::new();
+    country_scroll.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::Automatic);
+    country_scroll.set_vexpand(true);
+    let country_flow = gtk4::FlowBox::new();
+    country_flow.set_selection_mode(gtk4::SelectionMode::None);
+    country_flow.set_max_children_per_line(2);
+    country_flow.set_min_children_per_line(1);
+    country_flow.set_margin_top(12);
+    country_flow.set_margin_bottom(12);
+    country_flow.set_margin_start(16);
+    country_flow.set_margin_end(16);
+    country_scroll.set_child(Some(&country_flow));
+    country_toolbar.set_content(Some(&country_scroll));
+    let country_page = adw::NavigationPage::new(&country_toolbar, tr!("Country"));
+    nav_view.add(&country_page);
+    add_country_worldwide_toggle(&country_flow, &country_row);
+
+    let nav_push = nav_view.clone();
+    let country_page_push = country_page.clone();
+    country_row.connect_activated(move |_| {
+        nav_push.push(&country_page_push);
+    });
+
+    let nav_pop = nav_view.clone();
+    done_btn.connect_clicked(move |_| {
+        nav_pop.pop();
+    });
 
     let protocol_row = adw::ActionRow::new();
     protocol_row.set_title(tr!("Protocol"));
@@ -416,7 +615,7 @@ fn build_ui(app: &adw::Application) {
         avail: &gtk4::Button,
         http: &gtk4::CheckButton, https: &gtk4::CheckButton,
         ipv4: &gtk4::CheckButton, ipv6: &gtk4::CheckButton,
-        status: &gtk4::Switch, country: &adw::ComboRow,
+        status: &gtk4::Switch, country_row: &adw::ActionRow,
         loading: bool, msg: &str,
     ) {
         spinner.set_spinning(loading);
@@ -432,7 +631,7 @@ fn build_ui(app: &adw::Application) {
         ipv4.set_sensitive(!loading);
         ipv6.set_sensitive(!loading);
         status.set_sensitive(!loading);
-        country.set_sensitive(!loading);
+        country_row.set_sensitive(!loading);
     }
 
     // ── Channel message handler (main thread) ──
@@ -440,7 +639,8 @@ fn build_ui(app: &adw::Application) {
     let list_holder = mirror_list_holder.clone();
     let mm_arc = mm.clone();
     let mirror_scroll_h = mirror_scroll.clone();
-    let country_store_h = country_store.clone();
+    let country_flow_h = country_flow.clone();
+    let country_row_h = country_row.clone();
     let l_spinner = loading_spinner.clone();
     let l_label = loading_label.clone();
     let l_refresh = refresh_btn.clone();
@@ -455,7 +655,11 @@ fn build_ui(app: &adw::Application) {
     let l_ipv4 = ipv4_check.clone();
     let l_ipv6 = ipv6_check.clone();
     let l_status = status_check.clone();
-    let l_country = country_row.clone();
+    let l_country_row = country_row.clone();
+    let tx_h = tx.clone();
+    let rc_h = rc.clone();
+    let repo_list_h = repo_list.clone();
+    let repo_switches_h = repo_switches.clone();
     let _msg_handler = glib::timeout_add_local(
         std::time::Duration::from_millis(100),
         move || {
@@ -474,35 +678,67 @@ fn build_ui(app: &adw::Application) {
                         }
                         let has_mirrors = mgr.mirrors.len() > 0;
                         l_sort_dropdown.set_sensitive(has_mirrors);
-                        set_loading(&l_spinner, &l_label, &l_refresh, &l_hrefresh, &l_rank, &l_sync, &l_clean, &l_avail, &l_http, &l_https, &l_ipv4, &l_ipv6, &l_status, &l_country, false, "");
+                        set_loading(&l_spinner, &l_label, &l_refresh, &l_hrefresh, &l_rank, &l_sync, &l_clean, &l_avail, &l_http, &l_https, &l_ipv4, &l_ipv6, &l_status, &l_country_row, false, "");
                     }
                     "fetch_err" => {
                         alert(&win, tr!("Fetch Failed"), rest);
-                        set_loading(&l_spinner, &l_label, &l_refresh, &l_hrefresh, &l_rank, &l_sync, &l_clean, &l_avail, &l_http, &l_https, &l_ipv4, &l_ipv6, &l_status, &l_country, false, "");
+                        set_loading(&l_spinner, &l_label, &l_refresh, &l_hrefresh, &l_rank, &l_sync, &l_clean, &l_avail, &l_http, &l_https, &l_ipv4, &l_ipv6, &l_status, &l_country_row, false, "");
                     }
                     "rank_ok" => {
                         let mgr = mm_arc.lock().unwrap();
                         if let Some(list) = list_holder.lock().unwrap().as_ref() {
                             refresh_list_ui(list, &mgr.mirrors);
                         }
-                        set_loading(&l_spinner, &l_label, &l_refresh, &l_hrefresh, &l_rank, &l_sync, &l_clean, &l_avail, &l_http, &l_https, &l_ipv4, &l_ipv6, &l_status, &l_country, false, "");
+                        set_loading(&l_spinner, &l_label, &l_refresh, &l_hrefresh, &l_rank, &l_sync, &l_clean, &l_avail, &l_http, &l_https, &l_ipv4, &l_ipv6, &l_status, &l_country_row, false, "");
                     }
                     "rank_err" => {
                         alert(&win, tr!("Ranking Error"), rest);
-                        set_loading(&l_spinner, &l_label, &l_refresh, &l_hrefresh, &l_rank, &l_sync, &l_clean, &l_avail, &l_http, &l_https, &l_ipv4, &l_ipv6, &l_status, &l_country, false, "");
+                        set_loading(&l_spinner, &l_label, &l_refresh, &l_hrefresh, &l_rank, &l_sync, &l_clean, &l_avail, &l_http, &l_https, &l_ipv4, &l_ipv6, &l_status, &l_country_row, false, "");
                     }
                     "cntry" => {
                         let list: Vec<&str> = rest.split(',').collect();
-                        while country_store_h.n_items() > 1 {
-                            country_store_h.remove(1);
-                        }
+                        clear_country_flow(&country_flow_h);
+                        let world = add_country_worldwide_toggle(&country_flow_h, &country_row_h);
                         for c in list {
                             if !c.is_empty() {
-                                country_store_h.append(c);
+                                add_country_toggle(&country_flow_h, &world, &country_row_h, c);
                             }
                         }
                     }
                     "err" => alert(&win, tr!("Error"), rest),
+                    "toggle_done" => {
+                        if let Some(state) = repo_switches_h.lock().unwrap().get(rest) {
+                            state.sw.set_sensitive(true);
+                            state.busy.store(false, std::sync::atomic::Ordering::SeqCst);
+                        }
+                    }
+                    "toggle_fail" => {
+                        if let Some((name, rest2)) = rest.split_once(':') {
+                            if let Some((revert, msg)) = rest2.split_once(':') {
+                                if let Ok(flag) = revert.parse::<bool>() {
+                                    if let Some(state) = repo_switches_h.lock().unwrap().get(name) {
+                                        state.sw.set_active(flag);
+                                        state.sw.set_sensitive(true);
+                                        state.busy.store(false, std::sync::atomic::Ordering::SeqCst);
+                                    }
+                                }
+                                alert(&win, tr!("Error"), msg);
+                            }
+                        }
+                    }
+                    "repo_added" => {
+                        let name = rest.to_string();
+                        let row = adw::ActionRow::new();
+                        row.set_title(&name);
+                        let sw = gtk4::Switch::new();
+                        sw.set_active(true);
+                        sw.set_valign(gtk4::Align::Center);
+                        row.add_suffix(&sw);
+                        row.set_activatable_widget(Some(&sw));
+                        repo_list_h.append(&row);
+                        connect_repo_switch(&sw, &name, rc_h.clone(), tx_h.clone(), false, &repo_switches_h);
+                        inform(&win, tr!("Repository Added"), &format!("{} {}\n{}", tr!("Added repository:"), name, tr!("Sync repositories to use it")));
+                    }
                     _ => {}
                 }
             }
@@ -528,8 +764,8 @@ fn build_ui(app: &adw::Application) {
         let ipv4_check = ipv4_check.clone();
         let ipv6_check = ipv6_check.clone();
         let status_check = status_check.clone();
+        let country_flow = country_flow.clone();
         let country_row = country_row.clone();
-        let country_store = country_store.clone();
 
         refresh_btn.clone().connect_clicked(move |_| {
             let protocols: Vec<String> = [
@@ -548,9 +784,7 @@ fn build_ui(app: &adw::Application) {
                 alert(&win, tr!("No IP Versions"), tr!("Select at least one IP version"));
                 return;
             }
-            let country = country_store.string(country_row.selected())
-                .filter(|c| c.as_str() != "Worldwide")
-                .map(|c| c.to_string());
+            let countries = selected_countries(&country_flow);
             let use_status = status_check.is_active();
 
             set_loading(
@@ -567,7 +801,7 @@ fn build_ui(app: &adw::Application) {
             let mm = mm.clone();
             std::thread::spawn(move || {
                 let mut mgr = mm.lock().unwrap();
-                match mgr.fetch_mirrors(country.as_deref(), &protocols, &ip_versions, use_status) {
+                match mgr.fetch_mirrors(&countries, &protocols, &ip_versions, use_status) {
                     Ok(()) => {
                         let count = mgr.mirrors.len();
                         let _ = tx.send(format!("fetch_ok:{}", count));
@@ -1057,7 +1291,7 @@ fn build_ui(app: &adw::Application) {
     // ── Add Repository ──
     {
         let rc = rc.clone();
-        let repo_list = repo_list.clone();
+        let tx = tx.clone();
         let win = window.clone();
         add_repo_btn.connect_clicked(move |_| {
             let dialog = adw::AlertDialog::new(
@@ -1100,8 +1334,7 @@ fn build_ui(app: &adw::Application) {
             let siglevel_dropdown = siglevel_dropdown.clone();
             let siglevel_model = siglevel_model.clone();
             let rc = rc.clone();
-            let repo_list = repo_list.clone();
-            let win_resp = win.clone();
+            let tx = tx.clone();
             dialog.connect_response(None, move |_, resp| {
                 if resp != "add" {
                     return;
@@ -1112,31 +1345,21 @@ fn build_ui(app: &adw::Application) {
                     .string(siglevel_dropdown.selected())
                     .map(|s| s.to_string())
                     .unwrap_or_default();
-                match rc.lock().unwrap().add_repository(&name, &url, &siglevel) {
-                    Ok(()) => {
-                        let row = adw::ActionRow::new();
-                        row.set_title(&name);
-                        let sw = gtk4::Switch::new();
-                        sw.set_active(true);
-                        sw.set_valign(gtk4::Align::Center);
-                        row.add_suffix(&sw);
-                        row.set_activatable_widget(Some(&sw));
-                        repo_list.append(&row);
 
-                        let rc2 = rc.clone();
-                        let name_c = name.clone();
-                        sw.connect_state_set(move |_, active| {
-                            let mut cfg = rc2.lock().unwrap();
-                            let _ = cfg.toggle_repo_in_config(&name_c, active, false);
-                            glib::Propagation::Proceed
-                        });
-
-                        inform(&win_resp, tr!("Repository Added"), &format!("{} {}\n{}", tr!("Added repository:"), name, tr!("Sync repositories to use it")));
+                let rc = rc.clone();
+                let tx = tx.clone();
+                let name = name.clone();
+                std::thread::spawn(move || {
+                    let result = rc.lock().unwrap().add_repository(&name, &url, &siglevel);
+                    match result {
+                        Ok(()) => {
+                            let _ = tx.send(format!("repo_added:{name}"));
+                        }
+                        Err(e) => {
+                            let _ = tx.send(format!("err:{e}"));
+                        }
                     }
-                    Err(e) => {
-                        alert(&win_resp, tr!("Error"), &e);
-                    }
-                }
+                });
             });
 
             dialog.present(Some(&win));
@@ -1217,24 +1440,7 @@ fn build_ui(app: &adw::Application) {
                 row_title
             };
             if let Some(sw) = row.activatable_widget().and_downcast::<gtk4::Switch>() {
-                let rc = rc.clone();
-                let tx = tx.clone();
-                let name_c = name.clone();
-                sw.connect_state_set(move |_, active| {
-                    if is_third && active {
-                        let cfg = rc.lock().unwrap();
-                        if let Err(e) = cfg.enable_third_party(&name_c) {
-                            let _ = tx.send(format!("err:Enable failed: {e}"));
-                            return glib::Propagation::Stop;
-                        }
-                    }
-                    let mut cfg = rc.lock().unwrap();
-                    if let Err(e) = cfg.toggle_repo_in_config(&name_c, active, is_third) {
-                        let _ = tx.send(format!("err:{e}"));
-                        return glib::Propagation::Stop;
-                    }
-                    glib::Propagation::Proceed
-                });
+                connect_repo_switch(&sw, &name, rc.clone(), tx.clone(), is_third, &repo_switches);
             }
         }
     }

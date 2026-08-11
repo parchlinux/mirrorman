@@ -1,3 +1,4 @@
+pub mod cli;
 pub mod helper_client;
 pub mod i18n;
 pub mod log_viewer;

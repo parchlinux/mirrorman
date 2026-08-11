@@ -1,9 +1,9 @@
 use chrono::{DateTime, Duration, Utc};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Mirror {
     pub url: String,
     pub country: String,
@@ -30,6 +30,16 @@ pub fn country_flag(code: &str) -> String {
     let ra = char::from_u32(0x1F1E6 + (a - 65)).unwrap_or(' ');
     let rb = char::from_u32(0x1F1E6 + (b - 65)).unwrap_or(' ');
     format!("{}{}", ra, rb)
+}
+
+/// Builds the URL used to time a mirror (downloads a small repo database).
+pub fn speed_test_url(url: &str) -> String {
+    format!("{}/core/os/x86_64/core.db", url.trim_end_matches('/'))
+}
+
+/// Builds the URL used for a cheap HEAD availability probe.
+pub fn availability_url(url: &str) -> String {
+    format!("{}/lastsync", url.trim_end_matches('/'))
 }
 
 #[derive(Debug, Deserialize)]
@@ -64,6 +74,12 @@ const IRANIAN_MIRRORS: &[&str] = &[
     "https://mirror.arvancloud.ir/archlinux/$repo/os/$arch",
 ];
 
+/// True when a mirror's country should be kept for the given selection.
+/// An empty selection means "all countries".
+pub fn country_selected(countries: &[String], mirror_country: &str) -> bool {
+    countries.is_empty() || countries.iter().any(|c| c == mirror_country)
+}
+
 pub struct MirrorManager {
     pub mirrors: Vec<Mirror>,
     pub countries: Vec<String>,
@@ -79,7 +95,7 @@ impl MirrorManager {
 
     pub fn fetch_mirrors(
         &mut self,
-        country: Option<&str>,
+        countries: &[String],
         protocols: &[String],
         ip_versions: &[String],
         use_status: bool,
@@ -106,17 +122,21 @@ impl MirrorManager {
         let api: ApiResponse = serde_json::from_str(&body)
             .map_err(|e| format!("Failed to parse API response: {e}"))?;
 
-        let mut countries = std::collections::BTreeSet::new();
+        let mut countries_set = std::collections::BTreeSet::new();
         let mut mirrors = Vec::new();
+
+        let want_ipv4 = ip_versions.contains(&"4".to_string());
+        let want_ipv6 = ip_versions.contains(&"6".to_string());
+        if !want_ipv4 && !want_ipv6 {
+            return Err("Select at least one IP version".to_string());
+        }
 
         for m in api.urls {
             let mirror_country = m.country.unwrap_or_default();
-            countries.insert(mirror_country.clone());
+            countries_set.insert(mirror_country.clone());
 
-            if let Some(ref c) = country {
-                if c != &mirror_country {
-                    continue;
-                }
+            if !country_selected(countries, &mirror_country) {
+                continue;
             }
 
             let protocol = m.protocol.unwrap_or_default();
@@ -129,8 +149,12 @@ impl MirrorManager {
                 None => continue,
             };
 
-            let ipv4 = ip_versions.contains(&"4".to_string());
-            let ipv6 = ip_versions.contains(&"6".to_string());
+            let mirror_ipv4 = m.ipv4.unwrap_or(false);
+            let mirror_ipv6 = m.ipv6.unwrap_or(false);
+            let has_wanted_ip = (want_ipv4 && mirror_ipv4) || (want_ipv6 && mirror_ipv6);
+            if !has_wanted_ip {
+                continue;
+            }
 
             let last_sync = m.last_sync.clone();
             let country_code = m.country_code.unwrap_or_default();
@@ -147,8 +171,8 @@ impl MirrorManager {
                 speed: None,
                 last_sync,
                 enabled: true,
-                ipv4,
-                ipv6,
+                ipv4: mirror_ipv4,
+                ipv6: mirror_ipv6,
                 completion_pct: m.completion_pct,
                 score: m.score,
                 duration_avg: m.duration_avg,
@@ -156,8 +180,8 @@ impl MirrorManager {
             });
         }
 
-        countries.insert("Worldwide".to_string());
-        self.countries = countries.into_iter().collect();
+        countries_set.insert("Worldwide".to_string());
+        self.countries = countries_set.into_iter().collect();
         self.countries.sort();
         self.mirrors = mirrors;
 
@@ -238,7 +262,7 @@ impl MirrorManager {
 
             let url = mirror.url.clone();
             let results = Arc::clone(&results);
-            let test_url = format!("{}core/os/x86_64/core.db", url.trim_end_matches('/'));
+            let test_url = speed_test_url(&url);
 
             let handle = std::thread::spawn(move || {
                 let client = reqwest::blocking::Client::builder()
@@ -308,7 +332,8 @@ impl MirrorManager {
                     .ok()?;
 
                 let start = Instant::now();
-                match client.head(&url).send() {
+                let check_url = availability_url(&url);
+                match client.head(&check_url).send() {
                     Ok(resp) => {
                         let elapsed = start.elapsed().as_secs_f64() * 1000.0;
                         if resp.status().is_success() || resp.status().as_u16() < 400 {
@@ -404,6 +429,11 @@ impl MirrorManager {
     }
 
     pub fn auto_optimize(&mut self) -> Vec<Mirror> {
+        self.auto_optimize_with_count(5)
+    }
+
+    pub fn auto_optimize_with_count(&mut self, max_count: usize) -> Vec<Mirror> {
+        let max_count = max_count.max(1);
         let mut indices: Vec<usize> = (0..self.mirrors.len()).collect();
         indices.sort_by(|&i, &j| {
             let a = &self.mirrors[i];
@@ -429,7 +459,7 @@ impl MirrorManager {
             if !seen_countries.contains(&m.country) {
                 seen_countries.insert(m.country.clone());
                 selected_indices.insert(idx);
-                if selected_indices.len() >= 5 {
+                if selected_indices.len() >= max_count {
                     break;
                 }
             }
@@ -469,6 +499,14 @@ impl MirrorManager {
     pub fn save_mirrorlist(&self) -> Result<(), String> {
         if MIRRORLIST_FILE != "/etc/pacman.d/mirrorlist" {
             return Err("Refusing to write: unexpected mirrorlist path".to_string());
+        }
+
+        let enabled_count = self.mirrors.iter().filter(|m| m.enabled).count();
+        if enabled_count == 0 {
+            return Err(
+                "Refusing to save an empty mirrorlist: no mirrors are enabled. Run 'refresh' and 'best-setup' first, or use --force."
+                    .to_string(),
+            );
         }
 
         let content = self.generate_mirrorlist_content();
@@ -619,5 +657,41 @@ mod tests {
 
         let content = mgr.generate_mirrorlist_content();
         assert!(content.contains("Server = https://arch.mirror.org/$repo/os/$arch"));
+    }
+
+    #[test]
+    fn test_speed_test_url_has_slash() {
+        assert_eq!(
+            speed_test_url("https://mirror.aarnet.edu.au/pub/archlinux/"),
+            "https://mirror.aarnet.edu.au/pub/archlinux/core/os/x86_64/core.db"
+        );
+        assert_eq!(
+            speed_test_url("https://mirror.mobinhost.com/archlinux"),
+            "https://mirror.mobinhost.com/archlinux/core/os/x86_64/core.db"
+        );
+    }
+
+    #[test]
+    fn test_availability_url_probes_lastsync() {
+        assert_eq!(
+            availability_url("https://mirror.aarnet.edu.au/pub/archlinux/"),
+            "https://mirror.aarnet.edu.au/pub/archlinux/lastsync"
+        );
+    }
+
+    #[test]
+    fn test_country_selected_empty_means_all() {
+        let none: Vec<String> = vec![];
+        assert!(country_selected(&none, "Germany"));
+        assert!(country_selected(&none, "AnyCountry"));
+    }
+
+    #[test]
+    fn test_country_selected_multi() {
+        let selected = vec!["Germany".to_string(), "France".to_string()];
+        assert!(country_selected(&selected, "Germany"));
+        assert!(country_selected(&selected, "France"));
+        assert!(!country_selected(&selected, "Italy"));
+        assert!(!country_selected(&selected, ""));
     }
 }

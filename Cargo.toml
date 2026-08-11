@@ -20,6 +20,7 @@ name = "mirrorman-cli"
 path = "src/bin/mirrorman-cli.rs"
 
 [dependencies]
+clap = { version = "4", features = ["derive"] }
 gtk4 = { version = "0.9", features = ["v4_16"] }
 adw = { version = "0.7", package = "libadwaita", features = ["v1_6"] }
 glib = "0.20"

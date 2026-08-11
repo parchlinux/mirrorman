@@ -5,4 +5,4 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/mirrorman-cli --refresh --best-setup --save
+ExecStart=/usr/bin/mirrorman-cli auto
