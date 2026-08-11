@@ -1399,21 +1399,18 @@ fn build_ui(app: &adw::Application) {
             let a = adw::AboutDialog::new();
             a.set_application_name(tr!("Parch Repository Manager"));
             a.set_application_icon("com.parchlinux.mirrorman");
-            a.set_version("0.5.0-beta.1");
+            a.set_version("0.5.1");
             a.set_developer_name(tr!("Parch GNU/Linux Team"));
             a.set_website("https://parchlinux.com");
             a.set_copyright(tr!("Copyright 2026 Parch GNU/Linux Team"));
             a.set_license_type(gtk4::License::Gpl30);
             a.set_release_notes(tr!(
-"<p>Version 0.5.0 (2026)</p>
+"<p>Version 0.5.1 (2026)</p>
 <ul>
-<li>Mirror Health Dashboard with Score and Reliability metrics</li>
-<li>One-Click Best Setup for automatic multi-country mirror optimization</li>
-<li>Privilege Overhaul using mirrorman-helper D-Bus system service</li>
-<li>Mirrorlist Diff Preview before saving</li>
-<li>Template Profile storage and loading</li>
-<li>Transaction History log viewer</li>
-<li>Auto Refresh background timer integration</li>
+<li>Hardened mirrorman-helper: per-method polkit authorization and strict argument allow-lists</li>
+<li>Dedicated RunBlackArchStrap operation replaces arbitrary bash -c execution</li>
+<li>Multi-country mirror selection and country filter fixes</li>
+<li>Mirror health dashboard and one-click best setup from 0.5.0</li>
 </ul>"
             ));
             a.present(Some(&win));

@@ -1,7 +1,7 @@
 # Maintainer: Parch GNU/Linux Team
 
 pkgname=mirrorman
-pkgver=0.5.0.beta1
+pkgver=0.5.1
 pkgrel=1
 pkgdesc="Pacman mirror and repository manager for Parch Linux"
 arch=('x86_64')
