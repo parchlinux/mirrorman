@@ -29,6 +29,7 @@ build() {
   cd "$srcdir/mirrorman"
   cargo build --release
   msgfmt po/fa.po -o locale/fa/LC_MESSAGES/mirrorman.mo
+  gzip -9 -n -c man/mirrorman-cli.1 > man/mirrorman-cli.1.gz
 }
 
 package() {
@@ -42,6 +43,9 @@ package() {
 
   install -Dm755 "target/release/mirrorman-cli" \
     "$pkgdir/usr/bin/mirrorman-cli"
+
+  install -Dm644 "man/mirrorman-cli.1.gz" \
+    "$pkgdir/usr/share/man/man1/mirrorman-cli.1.gz"
 
   install -Dm644 "data/com.parchlinux.mirrorman.desktop" \
     "$pkgdir/usr/share/applications/com.parchlinux.mirrorman.desktop"

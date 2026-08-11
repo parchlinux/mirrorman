@@ -1,0 +1,161 @@
+.TH MIRRORMAN\-CLI 1 "2026" "mirrorman 0.5.1" "User Commands"
+.SH NAME
+mirrorman\-cli \- Pacman mirror and repository manager command line interface
+.SH SYNOPSIS
+.B mirrorman\-cli
+.RI [ command ]
+.RI [ options ]
+.SH DESCRIPTION
+.B mirrorman\-cli
+is the command line interface of the Parch Mirror Manager.
+It fetches mirror status data from the Arch Linux mirror status API,
+ranks mirrors by measured response time, selects the best combination
+of mirrors across countries, and writes the resulting mirrorlist to
+the system.
+.B mirrorman\-cli
+requires a working system D\-Bus and the
+.B mirrorman\-helper
+service to save the mirrorlist.
+.SH COMMANDS
+.SS refresh
+Fetch the latest mirror status from the Arch Linux mirror status API and
+store the result in the local cache. If the fetch succeeds the cached
+data is printed as a table unless
+.B \-\-json
+is given.
+.TP
+.BR \-c ", " \-\-country " " \fIcountry\fP
+Restrict mirrors to the given country.
+This option may be repeated to select several countries.
+By default mirrors from all countries are fetched.
+.TP
+.B \-\-protocol \fIprotocol\fP
+Restrict mirrors to the given protocol, either
+.B http
+or
+.BR https .
+This option may be repeated.
+By default both protocols are included.
+.TP
+.B \-\-ipv4
+Include mirrors that support IPv4.
+If neither
+.B \-\-ipv4
+nor
+.B \-\-ipv6
+is given, IPv4 and IPv6 mirrors are both included.
+.TP
+.B \-\-ipv6
+Include mirrors that support IPv6.
+.TP
+.B \-\-no\-status
+Include mirrors that are not up to date.
+By default only mirrors that report a fresh status are kept.
+.TP
+.B \-\-json
+Print the fetched mirrors as JSON instead of a table.
+.SS test
+Measure the response time of the mirrors stored in the cache and rank
+them by speed. The ranked list is written back to the cache and printed
+unless
+.B \-\-json
+is given.
+.TP
+.B \-\-workers \fInumber\fP
+Number of concurrent speed tests. The default is 50.
+.TP
+.B \-\-json
+Print the ranked mirrors as JSON instead of a table.
+.SS best\-setup
+Load the cached mirrors, run the automatic multi\-country selection
+algorithm, and store the chosen mirrors in the cache. The selected
+mirrors are printed unless
+.B \-\-json
+is given.
+.TP
+.B \-\-count \fInumber\fP
+Maximum number of mirrors to select. The default is 5.
+.TP
+.B \-\-json
+Print the selected mirrors as JSON instead of a list.
+.SS save
+Write the cached mirrorlist to
+.BR /etc/pacman.d/mirrorlist
+through the
+.B mirrorman\-helper
+D\-Bus service.
+.TP
+.B \-\-force
+Save the mirrorlist even when no mirror is enabled.
+.SS auto
+Fetch the latest mirror status, run the automatic selection algorithm,
+and save the resulting mirrorlist in a single step.
+.TP
+.B \-\-force
+Save the mirrorlist even when no mirror is enabled.
+.SS list
+Print the mirrors stored in the cache. If the cache is empty a message
+is printed instead.
+.TP
+.B \-\-json
+Print the cached mirrors as JSON instead of a table.
+.SS status
+Show a summary of the current system mirrorlist, including whether the
+file is present and how many
+.B Server
+entries it contains.
+.SH FILES
+.TP
+.I ~/.cache/mirrorman/mirrors.json
+Cache of the last fetched mirror data. The base directory honours
+.BR XDG_CACHE_HOME .
+.SH ENVIRONMENT
+.TP
+.B MIRRORMAN_CACHE
+Overrides the location of the mirror cache file. Mainly used by the
+test suite.
+.TP
+.B XDG_CACHE_HOME
+Base directory for user cache files. Defaults to
+.IR ~/.cache .
+.SH EXIT STATUS
+.TP
+.B 0
+The command completed successfully.
+.TP
+.B 1
+An error occurred, for example a network failure, a missing cache, or
+an unauthorized or rejected privilege request.
+.SH EXAMPLES
+Fetch mirrors from Germany, France, and Italy over HTTPS.
+.PP
+.RS
+.nf
+mirrorman\-cli refresh \-\-country Germany \-\-country France \-\-country Italy \-\-protocol https
+.fi
+.RE
+.PP
+Measure response times and save the fastest mirrors to the system.
+.PP
+.RS
+.nf
+mirrorman\-cli refresh
+mirrorman\-cli test
+mirrorman\-cli best\-setup
+mirrorman\-cli save
+.fi
+.RE
+.PP
+Run the complete automatic setup in one step.
+.PP
+.RS
+.nf
+mirrorman\-cli auto
+.fi
+.RE
+.SH SEE ALSO
+.BR mirrorman (1),
+.BR pacman (8),
+.BR pkexec (1)
+.SH AUTHOR
+Parch GNU/Linux Team
