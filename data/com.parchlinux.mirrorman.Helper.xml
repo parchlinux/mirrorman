@@ -23,5 +23,10 @@
       <arg name="stdout" type="s" direction="out"/>
       <arg name="stderr" type="s" direction="out"/>
     </method>
+    <method name="RunBlackArchStrap">
+      <arg name="success" type="b" direction="out"/>
+      <arg name="stdout" type="s" direction="out"/>
+      <arg name="stderr" type="s" direction="out"/>
+    </method>
   </interface>
 </node>

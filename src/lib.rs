@@ -1,5 +1,6 @@
 pub mod cli;
 pub mod helper_client;
+pub mod helper_guard;
 pub mod i18n;
 pub mod log_viewer;
 pub mod mirror_manager;

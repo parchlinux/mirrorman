@@ -232,14 +232,12 @@ fn enable_chaotic_aur() -> Result<(), String> {
 }
 
 fn enable_blackarch() -> Result<(), String> {
-    run_cmd(
-        "bash",
-        &[
-            "-c",
-            "cd /tmp && curl -O https://blackarch.org/strap.sh && echo '26849980b35a42e6e192c6d9ed8c46f0d6d06047  strap.sh' | sha1sum -c && chmod +x strap.sh && ./strap.sh && rm -f strap.sh",
-        ],
-    )?;
-    Ok(())
+    let (success, _, stderr) = crate::helper_client::HelperClient::run_blackarch_strap()?;
+    if success {
+        Ok(())
+    } else {
+        Err(format!("BlackArch strap failed: {stderr}"))
+    }
 }
 
 fn enable_archlinuxcn() -> Result<(), String> {
