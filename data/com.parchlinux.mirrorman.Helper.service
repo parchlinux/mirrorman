@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=com.parchlinux.mirrorman.Helper
+Exec=/usr/bin/mirrorman-helper
+User=root

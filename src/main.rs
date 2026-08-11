@@ -1,11 +1,14 @@
-#[macro_use]
-mod i18n;
-mod mirror_manager;
-mod pacman_settings;
-mod repo_config;
-mod sync_manager;
-mod utils;
+use mirrorman::i18n;
+use mirrorman::log_viewer;
+use mirrorman::mirror_manager;
+use mirrorman::pacman_settings;
+use mirrorman::repo_config;
+use mirrorman::sync_manager;
+use mirrorman::templates;
+use mirrorman::tr;
+use mirrorman::utils;
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -16,15 +19,174 @@ use mirror_manager::{country_flag, Mirror, MirrorManager};
 
 static APP_ID: &str = "com.parchlinux.mirrorman";
 
+// ── Multi-country filter helpers ──
+fn clear_country_flow(flow: &gtk4::FlowBox) {
+    while let Some(c) = flow.first_child() {
+        flow.remove(&c);
+    }
+}
+
+fn country_children(flow: &gtk4::FlowBox) -> Vec<gtk4::CheckButton> {
+    let mut out = Vec::new();
+    let mut child = flow.first_child();
+    while let Some(c) = child {
+        if let Ok(fbc) = c.clone().downcast::<gtk4::FlowBoxChild>() {
+            if let Some(btn) = fbc.child().and_then(|w| w.downcast::<gtk4::CheckButton>().ok()) {
+                out.push(btn);
+            }
+        }
+        child = c.next_sibling();
+    }
+    out
+}
+
+fn update_country_subtitle(row: &adw::ActionRow, flow: &gtk4::FlowBox) {
+    let sel = selected_countries(flow);
+    let text = if sel.is_empty() {
+        tr!("Worldwide").to_string()
+    } else {
+        sel.join(", ")
+    };
+    row.set_subtitle(&text);
+}
+
+fn add_country_worldwide_toggle(flow: &gtk4::FlowBox, row: &adw::ActionRow) -> gtk4::CheckButton {
+    let world = gtk4::CheckButton::with_label(tr!("Worldwide"));
+    world.set_active(true);
+    let flow_clone = flow.clone();
+    let row_clone = row.clone();
+    world.connect_toggled(move |b| {
+        if b.is_active() {
+            for btn in country_children(&flow_clone) {
+                if btn.label().as_deref() != Some(tr!("Worldwide")) && btn.is_active() {
+                    btn.set_active(false);
+                }
+            }
+            update_country_subtitle(&row_clone, &flow_clone);
+        }
+    });
+    flow.append(&world);
+    world
+}
+
+fn add_country_toggle(
+    flow: &gtk4::FlowBox,
+    worldwide: &gtk4::CheckButton,
+    row: &adw::ActionRow,
+    name: &str,
+) {
+    let btn = gtk4::CheckButton::with_label(name);
+    let flow_clone = flow.clone();
+    let worldwide_clone = worldwide.clone();
+    let row_clone = row.clone();
+    let name_owned = name.to_string();
+    btn.connect_toggled(move |b| {
+        if b.is_active() {
+            if name_owned != tr!("Worldwide") {
+                worldwide_clone.set_active(false);
+            }
+        } else if name_owned != tr!("Worldwide") {
+            let any = country_children(&flow_clone)
+                .iter()
+                .any(|btn| btn.label().as_deref() != Some(tr!("Worldwide")) && btn.is_active());
+            if !any {
+                worldwide_clone.set_active(true);
+            }
+        }
+        update_country_subtitle(&row_clone, &flow_clone);
+    });
+    flow.append(&btn);
+}
+
+fn selected_countries(flow: &gtk4::FlowBox) -> Vec<String> {
+    country_children(flow)
+        .iter()
+        .filter(|btn| btn.is_active() && btn.label().as_deref() != Some(tr!("Worldwide")))
+        .filter_map(|btn| btn.label().map(|l| l.to_string()))
+        .collect()
+}
+
+// ── Repository toggle helper ──
+// Long-running work (third-party keyring download, pacman.conf write via
+// D-Bus/pkexec) must not block the GTK main thread. The switch flips
+// immediately; the operation runs on a worker thread. Since GTK widgets are
+// not Send, results are marshalled back over the channel and handled by the
+// main-thread poll loop, which looks the switch up in `registry` to revert
+// and re-enable it on failure.
+#[derive(Clone)]
+struct SwitchState {
+    sw: gtk4::Switch,
+    busy: Arc<std::sync::atomic::AtomicBool>,
+}
+
+fn connect_repo_switch(
+    sw: &gtk4::Switch,
+    name: &str,
+    rc: Arc<Mutex<repo_config::RepoConfig>>,
+    tx: std::sync::mpsc::Sender<String>,
+    is_third: bool,
+    registry: &Arc<Mutex<HashMap<String, SwitchState>>>,
+) {
+    let busy = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    registry.lock().unwrap().insert(
+        name.to_string(),
+        SwitchState { sw: sw.clone(), busy: busy.clone() },
+    );
+
+    let registry_c = registry.clone();
+    let name_c = name.to_string();
+    sw.connect_state_set(move |_, active| {
+        let state = registry_c.lock().unwrap().get(&name_c).cloned();
+        let state = match state {
+            Some(s) => s,
+            None => return glib::Propagation::Proceed,
+        };
+        // Re-entry guard: programmatic state changes (revert / re-enable)
+        // must not start another operation.
+        if state.busy.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            return glib::Propagation::Proceed;
+        }
+        state.sw.set_sensitive(false);
+
+        let rc = rc.clone();
+        let tx = tx.clone();
+        let name = name_c.clone();
+        let active_c = active;
+        std::thread::spawn(move || {
+            let outcome: Result<(), String> = (|| {
+                if is_third && active_c {
+                    let cfg = rc.lock().unwrap();
+                    cfg.enable_third_party(&name)?;
+                }
+                let mut cfg = rc.lock().unwrap();
+                cfg.toggle_repo_in_config(&name, active_c, is_third)
+            })();
+
+            match outcome {
+                Ok(()) => {
+                    let _ = tx.send(format!("toggle_done:{name}"));
+                }
+                Err(e) => {
+                    let _ = tx.send(format!("toggle_fail:{name}:{}:{e}", !active_c));
+                }
+            }
+        });
+
+        glib::Propagation::Proceed
+    });
+}
+
 fn build_ui(app: &adw::Application) {
     let window = adw::ApplicationWindow::new(app);
     window.set_title(Some(tr!("Parch Repository Manager")));
     window.set_icon_name(Some("com.parchlinux.mirrorman"));
-    window.set_default_size(1200, 800);
+    window.set_default_size(960, 640);
+    window.set_size_request(600, 450);
 
     // ── Shared state ──
     let mm = Arc::new(Mutex::new(MirrorManager::new()));
     let rc = Arc::new(Mutex::new(repo_config::RepoConfig::new()));
+    let repo_switches: Arc<Mutex<HashMap<String, SwitchState>>> = Arc::new(Mutex::new(HashMap::new()));
 
     // ── Channel: background threads → main thread ──
     let (tx, rx) = std::sync::mpsc::channel::<String>();
@@ -34,7 +196,11 @@ fn build_ui(app: &adw::Application) {
 
     // ── Build UI ──
     let toolbar_view = adw::ToolbarView::new();
-    window.set_content(Some(&toolbar_view));
+    let bottom_sheet = adw::BottomSheet::new();
+    bottom_sheet.set_content(Some(&toolbar_view));
+    bottom_sheet.set_show_drag_handle(true);
+    bottom_sheet.set_modal(true);
+    window.set_content(Some(&bottom_sheet));
 
     let header = adw::HeaderBar::new();
     toolbar_view.add_top_bar(&header);
@@ -43,6 +209,16 @@ fn build_ui(app: &adw::Application) {
     header_refresh_btn.set_icon_name("view-refresh-symbolic");
     header_refresh_btn.set_tooltip_text(Some(tr!("Refresh Mirrors")));
     header.pack_start(&header_refresh_btn);
+
+    let templates_btn = gtk4::Button::new();
+    templates_btn.set_icon_name("folder-saved-search-symbolic");
+    templates_btn.set_tooltip_text(Some(tr!("Mirrorlist Templates")));
+    header.pack_end(&templates_btn);
+
+    let history_btn = gtk4::Button::new();
+    history_btn.set_icon_name("document-open-recent-symbolic");
+    history_btn.set_tooltip_text(Some(tr!("Transaction History")));
+    header.pack_end(&history_btn);
 
     let settings_btn = gtk4::Button::new();
     settings_btn.set_icon_name("preferences-system-symbolic");
@@ -54,20 +230,37 @@ fn build_ui(app: &adw::Application) {
     about_btn.set_tooltip_text(Some(tr!("About")));
     header.pack_end(&about_btn);
 
-    let paned = gtk4::Paned::new(gtk4::Orientation::Horizontal);
-    paned.set_position(320);
-    paned.set_shrink_start_child(false);
-    paned.set_shrink_end_child(false);
-    toolbar_view.set_content(Some(&paned));
+    let sidebar_toggle_btn = gtk4::Button::new();
+    sidebar_toggle_btn.set_icon_name("sidebar-show-symbolic");
+    sidebar_toggle_btn.set_tooltip_text(Some(tr!("Toggle Sidebar")));
+    header.pack_start(&sidebar_toggle_btn);
 
-    let left_sidebar = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-    left_sidebar.add_css_class("sidebar");
-    paned.set_start_child(Some(&left_sidebar));
+    window.set_default_size(960, 640);
+    window.set_size_request(360, 480);
+
+    let split_view = adw::OverlaySplitView::new();
+    split_view.set_min_sidebar_width(280.0);
+    split_view.set_max_sidebar_width(340.0);
+    split_view.set_sidebar_width_fraction(0.3);
+    toolbar_view.set_content(Some(&split_view));
+
+    {
+        let split_view = split_view.clone();
+        sidebar_toggle_btn.connect_clicked(move |_| {
+            let show = split_view.shows_sidebar();
+            split_view.set_show_sidebar(!show);
+        });
+    }
+
+    let nav_view = adw::NavigationView::new();
+    nav_view.add_css_class("sidebar");
+    split_view.set_sidebar(Some(&nav_view));
 
     let sidebar_scroll = gtk4::ScrolledWindow::new();
     sidebar_scroll.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::Automatic);
     sidebar_scroll.set_vexpand(true);
-    left_sidebar.append(&sidebar_scroll);
+    let main_page = adw::NavigationPage::new(&sidebar_scroll, tr!("Parch Repository Manager"));
+    nav_view.add(&main_page);
 
     let sidebar_box = gtk4::Box::new(gtk4::Orientation::Vertical, 18);
     sidebar_box.set_margin_top(18);
@@ -85,12 +278,51 @@ fn build_ui(app: &adw::Application) {
     filter_group.set_description(Some(tr!("Configure mirror selection criteria")));
     filter_clamp.set_child(Some(&filter_group));
 
-    let country_row = adw::ComboRow::new();
+    let country_row = adw::ActionRow::new();
     country_row.set_title(tr!("Country"));
-    let country_store = gtk4::StringList::new(&["Worldwide"]);
-    country_row.set_model(Some(&country_store));
-    country_row.set_selected(0);
+    country_row.set_subtitle(tr!("Worldwide"));
+    country_row.set_activatable(true);
     filter_group.add(&country_row);
+
+    let country_arrow = gtk4::Image::from_icon_name("go-next-symbolic");
+    country_row.add_suffix(&country_arrow);
+
+    let country_toolbar = adw::ToolbarView::new();
+    let country_header = adw::HeaderBar::new();
+    country_header.set_show_back_button(true);
+    country_header.set_show_title(false);
+    let done_btn = gtk4::Button::with_label(tr!("Done"));
+    done_btn.add_css_class("suggested-action");
+    country_header.pack_end(&done_btn);
+    country_toolbar.add_top_bar(&country_header);
+
+    let country_scroll = gtk4::ScrolledWindow::new();
+    country_scroll.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::Automatic);
+    country_scroll.set_vexpand(true);
+    let country_flow = gtk4::FlowBox::new();
+    country_flow.set_selection_mode(gtk4::SelectionMode::None);
+    country_flow.set_max_children_per_line(2);
+    country_flow.set_min_children_per_line(1);
+    country_flow.set_margin_top(12);
+    country_flow.set_margin_bottom(12);
+    country_flow.set_margin_start(16);
+    country_flow.set_margin_end(16);
+    country_scroll.set_child(Some(&country_flow));
+    country_toolbar.set_content(Some(&country_scroll));
+    let country_page = adw::NavigationPage::new(&country_toolbar, tr!("Country"));
+    nav_view.add(&country_page);
+    add_country_worldwide_toggle(&country_flow, &country_row);
+
+    let nav_push = nav_view.clone();
+    let country_page_push = country_page.clone();
+    country_row.connect_activated(move |_| {
+        nav_push.push(&country_page_push);
+    });
+
+    let nav_pop = nav_view.clone();
+    done_btn.connect_clicked(move |_| {
+        nav_pop.pop();
+    });
 
     let protocol_row = adw::ActionRow::new();
     protocol_row.set_title(tr!("Protocol"));
@@ -203,58 +435,60 @@ fn build_ui(app: &adw::Application) {
     add_repo_btn.set_halign(gtk4::Align::Center);
     sidebar_box.append(&add_repo_btn);
 
-    let sys_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
-    sys_box.set_margin_top(12);
-    sys_box.set_homogeneous(true);
-    sidebar_box.append(&sys_box);
+    let sys_grid = gtk4::Grid::new();
+    sys_grid.set_column_spacing(8);
+    sys_grid.set_row_spacing(8);
+    sys_grid.set_column_homogeneous(true);
+    sys_grid.set_margin_top(12);
+    sidebar_box.append(&sys_grid);
 
     let sync_btn = gtk4::Button::new();
-    let sync_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
+    let sync_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
     sync_box.set_halign(gtk4::Align::Center);
     sync_box.append(&gtk4::Image::from_icon_name("emblem-synchronizing-symbolic"));
     sync_box.append(&gtk4::Label::new(Some(tr!("Sync"))));
     sync_btn.set_child(Some(&sync_box));
     sync_btn.set_tooltip_text(Some(tr!("Save mirrorlist and sync repositories")));
-    sys_box.append(&sync_btn);
+    sys_grid.attach(&sync_btn, 0, 0, 1, 1);
 
     let clean_btn = gtk4::Button::new();
-    let clean_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
+    let clean_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
     clean_box.set_halign(gtk4::Align::Center);
     clean_box.append(&gtk4::Image::from_icon_name("user-trash-symbolic"));
     clean_box.append(&gtk4::Label::new(Some(tr!("Clean"))));
     clean_btn.set_child(Some(&clean_box));
     clean_btn.set_tooltip_text(Some(tr!("Clean package cache")));
-    sys_box.append(&clean_btn);
+    sys_grid.attach(&clean_btn, 1, 0, 1, 1);
 
     let backup_btn = gtk4::Button::new();
-    let backup_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
+    let backup_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
     backup_box.set_halign(gtk4::Align::Center);
     backup_box.append(&gtk4::Image::from_icon_name("document-save-symbolic"));
     backup_box.append(&gtk4::Label::new(Some(tr!("Backup"))));
     backup_btn.set_child(Some(&backup_box));
     backup_btn.set_tooltip_text(Some(tr!("Backup mirrorlist with timestamp")));
-    sys_box.append(&backup_btn);
+    sys_grid.attach(&backup_btn, 0, 1, 1, 1);
 
     let update_btn = gtk4::Button::new();
-    let update_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
+    let update_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
     update_box.set_halign(gtk4::Align::Center);
     update_box.append(&gtk4::Image::from_icon_name("system-software-update-symbolic"));
     update_box.append(&gtk4::Label::new(Some(tr!("Update"))));
     update_btn.set_child(Some(&update_box));
     update_btn.add_css_class("destructive-action");
     update_btn.set_tooltip_text(Some(tr!("Update all system packages")));
-    sys_box.append(&update_btn);
+    sys_grid.attach(&update_btn, 1, 1, 1, 1);
 
     let right_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
     right_box.add_css_class("view");
-    paned.set_end_child(Some(&right_box));
+    split_view.set_content(Some(&right_box));
 
     let mirror_toolbar = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
     mirror_toolbar.add_css_class("toolbar");
-    mirror_toolbar.set_margin_top(12);
-    mirror_toolbar.set_margin_bottom(12);
-    mirror_toolbar.set_margin_start(12);
-    mirror_toolbar.set_margin_end(12);
+    mirror_toolbar.set_margin_top(10);
+    mirror_toolbar.set_margin_bottom(10);
+    mirror_toolbar.set_margin_start(10);
+    mirror_toolbar.set_margin_end(10);
     right_box.append(&mirror_toolbar);
 
     let left_controls = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
@@ -277,57 +511,40 @@ fn build_ui(app: &adw::Application) {
     disable_btn.set_sensitive(false);
     left_controls.append(&disable_btn);
 
+    let best_setup_btn = gtk4::Button::new();
+    let bbox = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
+    bbox.append(&gtk4::Image::from_icon_name("starred-symbolic"));
+    bbox.append(&gtk4::Label::new(Some(tr!("Best Setup"))));
+    best_setup_btn.set_child(Some(&bbox));
+    best_setup_btn.add_css_class("suggested-action");
+    best_setup_btn.set_tooltip_text(Some(tr!("Auto-select top optimal mirrors across countries")));
+    left_controls.append(&best_setup_btn);
+
     let spacer = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
     spacer.set_hexpand(true);
     mirror_toolbar.append(&spacer);
 
     mirror_toolbar.append(&gtk4::Label::new(Some(tr!("Sort by:"))));
 
-    let sort_speed_btn = gtk4::Button::new();
-    let sbox = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
-    sbox.append(&gtk4::Image::from_icon_name("speedometer-symbolic"));
-    sbox.append(&gtk4::Label::new(Some(tr!("Speed"))));
-    sort_speed_btn.set_child(Some(&sbox));
-    sort_speed_btn.set_sensitive(false);
-    mirror_toolbar.append(&sort_speed_btn);
+    let sort_dropdown = gtk4::DropDown::from_strings(&[
+        &tr!("Speed"),
+        &tr!("Health"),
+        &tr!("Country"),
+        &tr!("Age"),
+    ]);
+    sort_dropdown.set_valign(gtk4::Align::Center);
+    sort_dropdown.set_sensitive(false);
+    mirror_toolbar.append(&sort_dropdown);
 
-    let sort_country_btn = gtk4::Button::new();
-    let cbox = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
-    cbox.append(&gtk4::Image::from_icon_name("mark-location-symbolic"));
-    cbox.append(&gtk4::Label::new(Some(tr!("Country"))));
-    sort_country_btn.set_child(Some(&cbox));
-    sort_country_btn.set_sensitive(false);
-    mirror_toolbar.append(&sort_country_btn);
-
-    let sort_age_btn = gtk4::Button::new();
-    let abox = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
-    abox.append(&gtk4::Image::from_icon_name("document-open-recent-symbolic"));
-    abox.append(&gtk4::Label::new(Some(tr!("Age"))));
-    sort_age_btn.set_child(Some(&abox));
-    sort_age_btn.set_sensitive(false);
-    mirror_toolbar.append(&sort_age_btn);
-
-    let avail_btn = gtk4::Button::new();
-    let abox = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
-    abox.append(&gtk4::Image::from_icon_name("emblem-ok-symbolic"));
-    abox.append(&gtk4::Label::new(Some(tr!("Availability"))));
-    avail_btn.set_child(Some(&abox));
+    let avail_btn = gtk4::Button::from_icon_name("emblem-ok-symbolic");
     avail_btn.set_tooltip_text(Some(tr!("Check mirror availability via HEAD request")));
     mirror_toolbar.append(&avail_btn);
 
-    let iran_btn = gtk4::Button::new();
-    let ibox = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
-    ibox.append(&gtk4::Image::from_icon_name("network-server-symbolic"));
-    ibox.append(&gtk4::Label::new(Some(tr!("Iran Blackout"))));
-    iran_btn.set_child(Some(&ibox));
+    let iran_btn = gtk4::Button::from_icon_name("network-server-symbolic");
     iran_btn.set_tooltip_text(Some(tr!("Add Iranian mirrors")));
     mirror_toolbar.append(&iran_btn);
 
-    let share_btn = gtk4::Button::new();
-    let share_box = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
-    share_box.append(&gtk4::Image::from_icon_name("edit-copy-symbolic"));
-    share_box.append(&gtk4::Label::new(Some(tr!("Share"))));
-    share_btn.set_child(Some(&share_box));
+    let share_btn = gtk4::Button::from_icon_name("edit-copy-symbolic");
     share_btn.set_tooltip_text(Some(tr!("Copy mirror configuration to clipboard")));
     mirror_toolbar.append(&share_btn);
 
@@ -376,53 +593,6 @@ fn build_ui(app: &adw::Application) {
         }
     }
 
-    // ── Helper: update mirror list widget ──
-    fn refresh_list_ui(list: &gtk4::ListBox, mirrors: &[Mirror]) {
-        while let Some(c) = list.first_child() { list.remove(&c); }
-        for m in mirrors {
-            let row = adw::ActionRow::new();
-            row.set_title(&m.url);
-            let ip_display = {
-                let mut ips = vec![];
-                if m.ipv4 { ips.push(tr!("IPv4")); }
-                if m.ipv6 { ips.push(tr!("IPv6")); }
-                if ips.is_empty() { String::new() } else { format!("🌐 {}", ips.join("/")) }
-            };
-            let parts = vec![
-                format!("{} {}", country_flag(&m.country_code), m.country),
-                format!("🔗 {}", m.protocol.to_uppercase()),
-                ip_display,
-                match m.speed {
-                    Some(s) if s < 100.0 => format!("🟢 {:.0}ms", s),
-                    Some(s) if s < 300.0 => format!("🟡 {:.0}ms", s),
-                    Some(s) => format!("🔴 {:.0}ms", s),
-                    None => format!("{} {}", "⚪", tr!("Not tested")),
-                },
-                format!("🕒 {}",
-                    m.last_sync.as_ref().and_then(|s| s.split('T').next()).unwrap_or(tr!("Unknown"))),
-            ];
-            row.set_subtitle(&parts.join(" • "));
-            let box_ = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
-            if m.enabled {
-                let ic = gtk4::Image::from_icon_name("emblem-ok-symbolic");
-                ic.add_css_class("success");
-                box_.append(&ic);
-                let lb = gtk4::Label::new(Some(tr!("Enabled")));
-                lb.add_css_class("success");
-                box_.append(&lb);
-            } else {
-                let ic = gtk4::Image::from_icon_name("window-close-symbolic");
-                ic.add_css_class("error");
-                box_.append(&ic);
-                let lb = gtk4::Label::new(Some(tr!("Disabled")));
-                lb.add_css_class("dim-label");
-                box_.append(&lb);
-            }
-            row.add_suffix(&box_);
-            list.append(&row);
-        }
-    }
-
     // ── Helper: show dialog ──
     fn inform(win: &adw::ApplicationWindow, title: &str, body: &str) {
         let d = adw::AlertDialog::new(Some(title), Some(body));
@@ -445,7 +615,7 @@ fn build_ui(app: &adw::Application) {
         avail: &gtk4::Button,
         http: &gtk4::CheckButton, https: &gtk4::CheckButton,
         ipv4: &gtk4::CheckButton, ipv6: &gtk4::CheckButton,
-        status: &gtk4::Switch, country: &adw::ComboRow,
+        status: &gtk4::Switch, country_row: &adw::ActionRow,
         loading: bool, msg: &str,
     ) {
         spinner.set_spinning(loading);
@@ -461,7 +631,7 @@ fn build_ui(app: &adw::Application) {
         ipv4.set_sensitive(!loading);
         ipv6.set_sensitive(!loading);
         status.set_sensitive(!loading);
-        country.set_sensitive(!loading);
+        country_row.set_sensitive(!loading);
     }
 
     // ── Channel message handler (main thread) ──
@@ -469,7 +639,8 @@ fn build_ui(app: &adw::Application) {
     let list_holder = mirror_list_holder.clone();
     let mm_arc = mm.clone();
     let mirror_scroll_h = mirror_scroll.clone();
-    let country_store_h = country_store.clone();
+    let country_flow_h = country_flow.clone();
+    let country_row_h = country_row.clone();
     let l_spinner = loading_spinner.clone();
     let l_label = loading_label.clone();
     let l_refresh = refresh_btn.clone();
@@ -478,15 +649,17 @@ fn build_ui(app: &adw::Application) {
     let l_sync = sync_btn.clone();
     let l_clean = clean_btn.clone();
     let l_avail = avail_btn.clone();
-    let l_sort_speed = sort_speed_btn.clone();
-    let l_sort_country = sort_country_btn.clone();
-    let l_sort_age = sort_age_btn.clone();
+    let l_sort_dropdown = sort_dropdown.clone();
     let l_http = http_check.clone();
     let l_https = https_check.clone();
     let l_ipv4 = ipv4_check.clone();
     let l_ipv6 = ipv6_check.clone();
     let l_status = status_check.clone();
-    let l_country = country_row.clone();
+    let l_country_row = country_row.clone();
+    let tx_h = tx.clone();
+    let rc_h = rc.clone();
+    let repo_list_h = repo_list.clone();
+    let repo_switches_h = repo_switches.clone();
     let _msg_handler = glib::timeout_add_local(
         std::time::Duration::from_millis(100),
         move || {
@@ -504,38 +677,68 @@ fn build_ui(app: &adw::Application) {
                             refresh_list_ui(list, &mgr.mirrors);
                         }
                         let has_mirrors = mgr.mirrors.len() > 0;
-                        l_sort_speed.set_sensitive(has_mirrors);
-                        l_sort_country.set_sensitive(has_mirrors);
-                        l_sort_age.set_sensitive(has_mirrors);
-                        set_loading(&l_spinner, &l_label, &l_refresh, &l_hrefresh, &l_rank, &l_sync, &l_clean, &l_avail, &l_http, &l_https, &l_ipv4, &l_ipv6, &l_status, &l_country, false, "");
+                        l_sort_dropdown.set_sensitive(has_mirrors);
+                        set_loading(&l_spinner, &l_label, &l_refresh, &l_hrefresh, &l_rank, &l_sync, &l_clean, &l_avail, &l_http, &l_https, &l_ipv4, &l_ipv6, &l_status, &l_country_row, false, "");
                     }
                     "fetch_err" => {
                         alert(&win, tr!("Fetch Failed"), rest);
-                        set_loading(&l_spinner, &l_label, &l_refresh, &l_hrefresh, &l_rank, &l_sync, &l_clean, &l_avail, &l_http, &l_https, &l_ipv4, &l_ipv6, &l_status, &l_country, false, "");
+                        set_loading(&l_spinner, &l_label, &l_refresh, &l_hrefresh, &l_rank, &l_sync, &l_clean, &l_avail, &l_http, &l_https, &l_ipv4, &l_ipv6, &l_status, &l_country_row, false, "");
                     }
                     "rank_ok" => {
                         let mgr = mm_arc.lock().unwrap();
                         if let Some(list) = list_holder.lock().unwrap().as_ref() {
                             refresh_list_ui(list, &mgr.mirrors);
                         }
-                        set_loading(&l_spinner, &l_label, &l_refresh, &l_hrefresh, &l_rank, &l_sync, &l_clean, &l_avail, &l_http, &l_https, &l_ipv4, &l_ipv6, &l_status, &l_country, false, "");
+                        set_loading(&l_spinner, &l_label, &l_refresh, &l_hrefresh, &l_rank, &l_sync, &l_clean, &l_avail, &l_http, &l_https, &l_ipv4, &l_ipv6, &l_status, &l_country_row, false, "");
                     }
                     "rank_err" => {
                         alert(&win, tr!("Ranking Error"), rest);
-                        set_loading(&l_spinner, &l_label, &l_refresh, &l_hrefresh, &l_rank, &l_sync, &l_clean, &l_avail, &l_http, &l_https, &l_ipv4, &l_ipv6, &l_status, &l_country, false, "");
+                        set_loading(&l_spinner, &l_label, &l_refresh, &l_hrefresh, &l_rank, &l_sync, &l_clean, &l_avail, &l_http, &l_https, &l_ipv4, &l_ipv6, &l_status, &l_country_row, false, "");
                     }
                     "cntry" => {
                         let list: Vec<&str> = rest.split(',').collect();
-                        while country_store_h.n_items() > 1 {
-                            country_store_h.remove(1);
-                        }
+                        clear_country_flow(&country_flow_h);
+                        let world = add_country_worldwide_toggle(&country_flow_h, &country_row_h);
                         for c in list {
                             if !c.is_empty() {
-                                country_store_h.append(c);
+                                add_country_toggle(&country_flow_h, &world, &country_row_h, c);
                             }
                         }
                     }
                     "err" => alert(&win, tr!("Error"), rest),
+                    "toggle_done" => {
+                        if let Some(state) = repo_switches_h.lock().unwrap().get(rest) {
+                            state.sw.set_sensitive(true);
+                            state.busy.store(false, std::sync::atomic::Ordering::SeqCst);
+                        }
+                    }
+                    "toggle_fail" => {
+                        if let Some((name, rest2)) = rest.split_once(':') {
+                            if let Some((revert, msg)) = rest2.split_once(':') {
+                                if let Ok(flag) = revert.parse::<bool>() {
+                                    if let Some(state) = repo_switches_h.lock().unwrap().get(name) {
+                                        state.sw.set_active(flag);
+                                        state.sw.set_sensitive(true);
+                                        state.busy.store(false, std::sync::atomic::Ordering::SeqCst);
+                                    }
+                                }
+                                alert(&win, tr!("Error"), msg);
+                            }
+                        }
+                    }
+                    "repo_added" => {
+                        let name = rest.to_string();
+                        let row = adw::ActionRow::new();
+                        row.set_title(&name);
+                        let sw = gtk4::Switch::new();
+                        sw.set_active(true);
+                        sw.set_valign(gtk4::Align::Center);
+                        row.add_suffix(&sw);
+                        row.set_activatable_widget(Some(&sw));
+                        repo_list_h.append(&row);
+                        connect_repo_switch(&sw, &name, rc_h.clone(), tx_h.clone(), false, &repo_switches_h);
+                        inform(&win, tr!("Repository Added"), &format!("{} {}\n{}", tr!("Added repository:"), name, tr!("Sync repositories to use it")));
+                    }
                     _ => {}
                 }
             }
@@ -561,8 +764,8 @@ fn build_ui(app: &adw::Application) {
         let ipv4_check = ipv4_check.clone();
         let ipv6_check = ipv6_check.clone();
         let status_check = status_check.clone();
+        let country_flow = country_flow.clone();
         let country_row = country_row.clone();
-        let country_store = country_store.clone();
 
         refresh_btn.clone().connect_clicked(move |_| {
             let protocols: Vec<String> = [
@@ -581,9 +784,7 @@ fn build_ui(app: &adw::Application) {
                 alert(&win, tr!("No IP Versions"), tr!("Select at least one IP version"));
                 return;
             }
-            let country = country_store.string(country_row.selected())
-                .filter(|c| c.as_str() != "Worldwide")
-                .map(|c| c.to_string());
+            let countries = selected_countries(&country_flow);
             let use_status = status_check.is_active();
 
             set_loading(
@@ -600,7 +801,7 @@ fn build_ui(app: &adw::Application) {
             let mm = mm.clone();
             std::thread::spawn(move || {
                 let mut mgr = mm.lock().unwrap();
-                match mgr.fetch_mirrors(country.as_deref(), &protocols, &ip_versions, use_status) {
+                match mgr.fetch_mirrors(&countries, &protocols, &ip_versions, use_status) {
                     Ok(()) => {
                         let count = mgr.mirrors.len();
                         let _ = tx.send(format!("fetch_ok:{}", count));
@@ -723,9 +924,7 @@ fn build_ui(app: &adw::Application) {
         let mirror_list = mirror_list.clone();
         let mirror_scroll = mirror_scroll.clone();
         let win = window.clone();
-        let l_sort_speed = sort_speed_btn.clone();
-        let l_sort_country = sort_country_btn.clone();
-        let l_sort_age = sort_age_btn.clone();
+        let l_sort_dropdown = sort_dropdown.clone();
         let l_rank = rank_btn.clone();
         iran_btn.connect_clicked(move |_| {
             let mut mgr = mm.lock().unwrap();
@@ -733,9 +932,7 @@ fn build_ui(app: &adw::Application) {
             let count = mgr.mirrors.len();
             mirror_scroll.set_child(Some(&mirror_list));
             refresh_list_ui(&mirror_list, &mgr.mirrors);
-            l_sort_speed.set_sensitive(true);
-            l_sort_country.set_sensitive(true);
-            l_sort_age.set_sensitive(true);
+            l_sort_dropdown.set_sensitive(true);
             l_rank.set_sensitive(true);
             inform(&win, tr!("Iran Blackout Added"),
                 &format!("{}\n\n{} {}", tr!("Added 3 Iranian mirrors."), tr!("Total mirrors:"), count));
@@ -806,35 +1003,49 @@ fn build_ui(app: &adw::Application) {
         });
     }
 
-    // ── Sort buttons ──
+    // ── Sort DropDown ──
     {
         let mm = mm.clone();
         let list = mirror_list.clone();
-        sort_speed_btn.connect_clicked(move |_| {
+        sort_dropdown.connect_selected_notify(move |dd| {
             if let Ok(mut mgr) = mm.try_lock() {
-                mgr.sort_by_speed();
+                match dd.selected() {
+                    0 => mgr.sort_by_speed(),
+                    1 => mgr.sort_by_score(),
+                    2 => mgr.sort_by_country(),
+                    3 => mgr.sort_by_age(),
+                    _ => {}
+                }
                 refresh_list_ui(&list, &mgr.mirrors);
             }
         });
     }
+
+    // ── Best Setup ──
     {
         let mm = mm.clone();
         let list = mirror_list.clone();
-        sort_country_btn.connect_clicked(move |_| {
-            if let Ok(mut mgr) = mm.try_lock() {
-                mgr.sort_by_country();
-                refresh_list_ui(&list, &mgr.mirrors);
+        let win = window.clone();
+        let mirror_scroll = mirror_scroll.clone();
+        let l_sort_dropdown = sort_dropdown.clone();
+        let l_rank = rank_btn.clone();
+        best_setup_btn.connect_clicked(move |_| {
+            let mut mgr = mm.lock().unwrap();
+            if mgr.mirrors.is_empty() {
+                alert(&win, tr!("No Mirrors"), tr!("Fetch mirrors first before running Best Setup."));
+                return;
             }
-        });
-    }
-    {
-        let mm = mm.clone();
-        let list = mirror_list.clone();
-        sort_age_btn.connect_clicked(move |_| {
-            if let Ok(mut mgr) = mm.try_lock() {
-                mgr.sort_by_age();
-                refresh_list_ui(&list, &mgr.mirrors);
-            }
+            let selected = mgr.auto_optimize();
+            mirror_scroll.set_child(Some(&list));
+            refresh_list_ui(&list, &mgr.mirrors);
+            l_sort_dropdown.set_sensitive(true);
+            l_rank.set_sensitive(true);
+            let mirror_urls: Vec<String> = selected.iter().map(|m| format!("• {} ({})", m.url, m.country)).collect();
+            inform(
+                &win,
+                tr!("Best Setup Applied"),
+                &format!("{}\n\n{}", tr!("Selected top optimal mirrors across countries:"), mirror_urls.join("\n"))
+            );
         });
     }
 
@@ -858,27 +1069,53 @@ fn build_ui(app: &adw::Application) {
         let win = window.clone();
 
         sync_btn.clone().connect_clicked(move |_| {
-            set_loading(
-                &loading_spinner, &loading_label,
-                &refresh_btn, &header_refresh_btn,
-                &rank_btn, &sync_btn, &clean_btn, &avail_btn,
-                &http_check, &https_check,
-                &ipv4_check, &ipv6_check,
-                &status_check, &country_row,
-                true, "Saving mirrorlist...",
-            );
+            let current = MirrorManager::read_current_mirrorlist();
+            let proposed = {
+                let mgr = mm.lock().unwrap();
+                mgr.generate_mirrorlist_content()
+            };
 
-            let dialog = adw::AlertDialog::new(
-                Some(tr!("Syncing Repositories")),
-                Some(tr!("Saving mirrorlist and refreshing package databases...")),
-            );
-            dialog.add_response("cancel", tr!("Cancel"));
-            let progress = gtk4::ProgressBar::new();
-            progress.set_pulse_step(0.1);
-            dialog.set_extra_child(Some(&progress));
-            dialog.present(Some(&win));
+            let win = win.clone();
+            let mm = mm.clone();
+            let loading_spinner = loading_spinner.clone();
+            let loading_label = loading_label.clone();
+            let refresh_btn = refresh_btn.clone();
+            let header_refresh_btn = header_refresh_btn.clone();
+            let rank_btn = rank_btn.clone();
+            let sync_btn = sync_btn.clone();
+            let clean_btn = clean_btn.clone();
+            let avail_btn = avail_btn.clone();
+            let http_check = http_check.clone();
+            let https_check = https_check.clone();
+            let ipv4_check = ipv4_check.clone();
+            let ipv6_check = ipv6_check.clone();
+            let status_check = status_check.clone();
+            let country_row = country_row.clone();
 
-            let sync_result: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+            let win_for_diff = win.clone();
+            show_diff_dialog(&win_for_diff, &current, &proposed, move || {
+                let win_dialog = win.clone();
+                set_loading(
+                    &loading_spinner, &loading_label,
+                    &refresh_btn, &header_refresh_btn,
+                    &rank_btn, &sync_btn, &clean_btn, &avail_btn,
+                    &http_check, &https_check,
+                    &ipv4_check, &ipv6_check,
+                    &status_check, &country_row,
+                    true, "Saving mirrorlist...",
+                );
+
+                let dialog = adw::AlertDialog::new(
+                    Some(tr!("Syncing Repositories")),
+                    Some(tr!("Saving mirrorlist and refreshing package databases...")),
+                );
+                dialog.add_response("cancel", tr!("Cancel"));
+                let progress = gtk4::ProgressBar::new();
+                progress.set_pulse_step(0.1);
+                dialog.set_extra_child(Some(&progress));
+                dialog.present(Some(&win_dialog));
+
+                let sync_result: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
 
             let result_check = sync_result.clone();
             let p_loading_spinner = loading_spinner.clone();
@@ -940,6 +1177,7 @@ fn build_ui(app: &adw::Application) {
                     Err(e) => format!("err:{e}"),
                 };
                 *sync_result.lock().unwrap() = Some(msg);
+            });
             });
         });
     }
@@ -1053,7 +1291,7 @@ fn build_ui(app: &adw::Application) {
     // ── Add Repository ──
     {
         let rc = rc.clone();
-        let repo_list = repo_list.clone();
+        let tx = tx.clone();
         let win = window.clone();
         add_repo_btn.connect_clicked(move |_| {
             let dialog = adw::AlertDialog::new(
@@ -1096,8 +1334,7 @@ fn build_ui(app: &adw::Application) {
             let siglevel_dropdown = siglevel_dropdown.clone();
             let siglevel_model = siglevel_model.clone();
             let rc = rc.clone();
-            let repo_list = repo_list.clone();
-            let win_resp = win.clone();
+            let tx = tx.clone();
             dialog.connect_response(None, move |_, resp| {
                 if resp != "add" {
                     return;
@@ -1108,42 +1345,50 @@ fn build_ui(app: &adw::Application) {
                     .string(siglevel_dropdown.selected())
                     .map(|s| s.to_string())
                     .unwrap_or_default();
-                match rc.lock().unwrap().add_repository(&name, &url, &siglevel) {
-                    Ok(()) => {
-                        let row = adw::ActionRow::new();
-                        row.set_title(&name);
-                        let sw = gtk4::Switch::new();
-                        sw.set_active(true);
-                        sw.set_valign(gtk4::Align::Center);
-                        row.add_suffix(&sw);
-                        row.set_activatable_widget(Some(&sw));
-                        repo_list.append(&row);
 
-                        let rc2 = rc.clone();
-                        let name_c = name.clone();
-                        sw.connect_state_set(move |_, active| {
-                            let mut cfg = rc2.lock().unwrap();
-                            let _ = cfg.toggle_repo_in_config(&name_c, active, false);
-                            glib::Propagation::Proceed
-                        });
-
-                        inform(&win_resp, tr!("Repository Added"), &format!("{} {}\n{}", tr!("Added repository:"), name, tr!("Sync repositories to use it")));
+                let rc = rc.clone();
+                let tx = tx.clone();
+                let name = name.clone();
+                std::thread::spawn(move || {
+                    let result = rc.lock().unwrap().add_repository(&name, &url, &siglevel);
+                    match result {
+                        Ok(()) => {
+                            let _ = tx.send(format!("repo_added:{name}"));
+                        }
+                        Err(e) => {
+                            let _ = tx.send(format!("err:{e}"));
+                        }
                     }
-                    Err(e) => {
-                        alert(&win_resp, tr!("Error"), &e);
-                    }
-                }
+                });
             });
 
             dialog.present(Some(&win));
         });
     }
 
-    // ── Settings ──
+    // ── Templates ──
     {
         let win = window.clone();
+        let mm = mm.clone();
+        let list_holder = mirror_list_holder.clone();
+        templates_btn.connect_clicked(move |_| {
+            show_templates_dialog(&win, mm.clone(), list_holder.clone());
+        });
+    }
+
+    // ── History ──
+    {
+        let win = window.clone();
+        history_btn.connect_clicked(move |_| {
+            show_history_window(&win);
+        });
+    }
+
+    // ── Settings ──
+    {
+        let bottom_sheet = bottom_sheet.clone();
         settings_btn.connect_clicked(move |_| {
-            pacman_settings::show_settings_window(&win);
+            pacman_settings::show_settings_sheet(&bottom_sheet);
         });
     }
 
@@ -1151,39 +1396,24 @@ fn build_ui(app: &adw::Application) {
     {
         let win = window.clone();
         about_btn.connect_clicked(move |_| {
-            let a = adw::AboutWindow::new();
-            a.set_transient_for(Some(&win));
+            let a = adw::AboutDialog::new();
             a.set_application_name(tr!("Parch Repository Manager"));
             a.set_application_icon("com.parchlinux.mirrorman");
-            a.set_version("0.4.2");
+            a.set_version("0.5.1");
             a.set_developer_name(tr!("Parch GNU/Linux Team"));
             a.set_website("https://parchlinux.com");
             a.set_copyright(tr!("Copyright 2026 Parch GNU/Linux Team"));
             a.set_license_type(gtk4::License::Gpl30);
             a.set_release_notes(tr!(
-"<p>Version 0.4.2 (2026)</p>
+"<p>Version 0.5.1 (2026)</p>
 <ul>
-<li>Fixed enable/disable mirror button freezing the application (deadlock in mutex)</li>
-<li>Mirrors that fail availability test are now disabled by default</li>
-</ul>
-<p>Version 0.4.1 (2026)</p>
-<ul>
-<li>Fixed missing slash in mirrorlist causing all mirrors to return HTTP 404</li>
-</ul>
-<p>Version 0.4 (2026)</p>
-<ul>
-<li>SigLevel dropdown in Add Repository dialog</li>
-<li>Mirrorlist backup with timestamp button</li>
-<li>Share/copy mirror configuration to clipboard</li>
-<li>BlackArch strap.sh SHA1 verification</li>
-<li>ArchLinuxCN keyring auto-install</li>
-<li>SigLevel support in custom and third-party repos</li>
-<li>Fixed dead Iranian mirrors removal</li>
-<li>Fixed third-party repo detection and toggle</li>
-<li>Fixed multilib Include lines on re-enable</li>
-<li>Updated Persian translations</li>
-</ul>"));
-            a.present();
+<li>Hardened mirrorman-helper: per-method polkit authorization and strict argument allow-lists</li>
+<li>Dedicated RunBlackArchStrap operation replaces arbitrary bash -c execution</li>
+<li>Multi-country mirror selection and country filter fixes</li>
+<li>Mirror health dashboard and one-click best setup from 0.5.0</li>
+</ul>"
+            ));
+            a.present(Some(&win));
         });
     }
 
@@ -1207,24 +1437,7 @@ fn build_ui(app: &adw::Application) {
                 row_title
             };
             if let Some(sw) = row.activatable_widget().and_downcast::<gtk4::Switch>() {
-                let rc = rc.clone();
-                let tx = tx.clone();
-                let name_c = name.clone();
-                sw.connect_state_set(move |_, active| {
-                    if is_third && active {
-                        let cfg = rc.lock().unwrap();
-                        if let Err(e) = cfg.enable_third_party(&name_c) {
-                            let _ = tx.send(format!("err:Enable failed: {e}"));
-                            return glib::Propagation::Stop;
-                        }
-                    }
-                    let mut cfg = rc.lock().unwrap();
-                    if let Err(e) = cfg.toggle_repo_in_config(&name_c, active, is_third) {
-                        let _ = tx.send(format!("err:{e}"));
-                        return glib::Propagation::Stop;
-                    }
-                    glib::Propagation::Proceed
-                });
+                connect_repo_switch(&sw, &name, rc.clone(), tx.clone(), is_third, &repo_switches);
             }
         }
     }
@@ -1247,6 +1460,387 @@ fn build_ui(app: &adw::Application) {
     window.present();
 }
 
+fn refresh_list_ui(list: &gtk4::ListBox, mirrors: &[Mirror]) {
+    while let Some(c) = list.first_child() { list.remove(&c); }
+    for m in mirrors {
+        let row = adw::ActionRow::new();
+        row.set_title(&m.url);
+        let ip_display = {
+            let mut ips = vec![];
+            if m.ipv4 { ips.push(tr!("IPv4")); }
+            if m.ipv6 { ips.push(tr!("IPv6")); }
+            if ips.is_empty() { String::new() } else { format!("🌐 {}", ips.join("/")) }
+        };
+        let speed_str = match m.speed {
+            Some(s) if s < 100.0 => format!("🟢 {:.0}ms", s),
+            Some(s) if s < 300.0 => format!("🟡 {:.0}ms", s),
+            Some(s) => format!("🔴 {:.0}ms", s),
+            None => format!("{} {}", "⚪", tr!("Not tested")),
+        };
+        let health_str = match (m.score, m.completion_pct) {
+            (Some(score), Some(cp)) => {
+                let cp_pct = if cp <= 1.0 { cp * 100.0 } else { cp };
+                let health_icon = if score < 1.5 && cp_pct >= 95.0 {
+                    "🟢"
+                } else if score < 3.0 || cp_pct >= 80.0 {
+                    "🟡"
+                } else {
+                    "🔴"
+                };
+                format!("{health_icon} Score: {:.1} • {:.0}%", score, cp_pct)
+            }
+            (Some(score), None) => format!("Score: {:.1}", score),
+            (None, Some(cp)) => {
+                let cp_pct = if cp <= 1.0 { cp * 100.0 } else { cp };
+                format!("{:.0}%", cp_pct)
+            }
+            (None, None) => String::new(),
+        };
+        let mut parts = vec![
+            format!("{} {}", country_flag(&m.country_code), m.country),
+            format!("🔗 {}", m.protocol.to_uppercase()),
+            ip_display,
+            speed_str,
+        ];
+        if !health_str.is_empty() {
+            parts.push(health_str);
+        }
+        parts.push(format!("🕒 {}",
+            m.last_sync.as_ref().and_then(|s| s.split('T').next()).unwrap_or(tr!("Unknown"))));
+
+        row.set_subtitle(&parts.join(" • "));
+        let box_ = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
+        if m.enabled {
+            let ic = gtk4::Image::from_icon_name("emblem-ok-symbolic");
+            ic.add_css_class("success");
+            box_.append(&ic);
+            let lb = gtk4::Label::new(Some(tr!("Enabled")));
+            lb.add_css_class("success");
+            box_.append(&lb);
+        } else {
+            let ic = gtk4::Image::from_icon_name("window-close-symbolic");
+            ic.add_css_class("error");
+            box_.append(&ic);
+            let lb = gtk4::Label::new(Some(tr!("Disabled")));
+            lb.add_css_class("dim-label");
+            box_.append(&lb);
+        }
+        row.add_suffix(&box_);
+        list.append(&row);
+    }
+}
+
+fn show_diff_dialog<F: Fn() + 'static>(parent: &adw::ApplicationWindow, current: &str, proposed: &str, on_confirm: F) {
+    let win = adw::Window::new();
+    win.set_transient_for(Some(parent));
+    win.set_modal(true);
+    win.set_title(Some(tr!("Mirrorlist Diff Preview")));
+    win.set_default_size(900, 600);
+
+    let toolbar_view = adw::ToolbarView::new();
+    win.set_content(Some(&toolbar_view));
+
+    let header = adw::HeaderBar::new();
+    toolbar_view.add_top_bar(&header);
+
+    let apply_btn = gtk4::Button::with_label(tr!("Apply & Save"));
+    apply_btn.add_css_class("suggested-action");
+    header.pack_end(&apply_btn);
+
+    let cancel_btn = gtk4::Button::with_label(tr!("Cancel"));
+    {
+        let win = win.clone();
+        cancel_btn.connect_clicked(move |_| win.destroy());
+    }
+    header.pack_start(&cancel_btn);
+
+    let paned = gtk4::Paned::new(gtk4::Orientation::Horizontal);
+    paned.set_position(450);
+    paned.set_shrink_start_child(false);
+    paned.set_shrink_end_child(false);
+    toolbar_view.set_content(Some(&paned));
+
+    let left_box = gtk4::Box::new(gtk4::Orientation::Vertical, 6);
+    left_box.set_margin_top(8);
+    left_box.set_margin_bottom(8);
+    left_box.set_margin_start(8);
+    left_box.set_margin_end(8);
+    let left_label = gtk4::Label::new(Some(tr!("Current Mirrorlist (/etc/pacman.d/mirrorlist)")));
+    left_label.add_css_class("heading");
+    left_box.append(&left_label);
+
+    let left_scroll = gtk4::ScrolledWindow::new();
+    left_scroll.set_vexpand(true);
+    let left_text = gtk4::TextView::new();
+    left_text.set_editable(false);
+    left_text.set_monospace(true);
+    left_text.buffer().set_text(current);
+    left_scroll.set_child(Some(&left_text));
+    left_box.append(&left_scroll);
+    paned.set_start_child(Some(&left_box));
+
+    let right_box = gtk4::Box::new(gtk4::Orientation::Vertical, 6);
+    right_box.set_margin_top(8);
+    right_box.set_margin_bottom(8);
+    right_box.set_margin_start(8);
+    right_box.set_margin_end(8);
+    let right_label = gtk4::Label::new(Some(tr!("Proposed Mirrorlist")));
+    right_label.add_css_class("heading");
+    right_box.append(&right_label);
+
+    let right_scroll = gtk4::ScrolledWindow::new();
+    right_scroll.set_vexpand(true);
+    let right_text = gtk4::TextView::new();
+    right_text.set_editable(false);
+    right_text.set_monospace(true);
+    right_text.buffer().set_text(proposed);
+    right_scroll.set_child(Some(&right_text));
+    right_box.append(&right_scroll);
+    paned.set_end_child(Some(&right_box));
+
+    let win_confirm = win.clone();
+    apply_btn.connect_clicked(move |_| {
+        win_confirm.destroy();
+        on_confirm();
+    });
+
+    win.present();
+}
+
+fn show_templates_dialog(
+    parent: &adw::ApplicationWindow,
+    mm: Arc<Mutex<MirrorManager>>,
+    mirror_list_holder: Arc<Mutex<Option<gtk4::ListBox>>>,
+) {
+    let win = adw::Window::new();
+    win.set_transient_for(Some(parent));
+    win.set_modal(true);
+    win.set_title(Some(tr!("Mirrorlist Templates")));
+    win.set_default_size(600, 500);
+
+    let toolbar_view = adw::ToolbarView::new();
+    win.set_content(Some(&toolbar_view));
+
+    let header = adw::HeaderBar::new();
+    toolbar_view.add_top_bar(&header);
+
+    let save_tpl_btn = gtk4::Button::with_label(tr!("Save Profile"));
+    save_tpl_btn.add_css_class("suggested-action");
+    header.pack_start(&save_tpl_btn);
+
+    let scroll = gtk4::ScrolledWindow::new();
+    scroll.set_vexpand(true);
+    toolbar_view.set_content(Some(&scroll));
+
+    let main_box = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
+    main_box.set_margin_top(12);
+    main_box.set_margin_bottom(12);
+    main_box.set_margin_start(12);
+    main_box.set_margin_end(12);
+    scroll.set_child(Some(&main_box));
+
+    let group = adw::PreferencesGroup::new();
+    group.set_title(tr!("Saved Profiles"));
+    main_box.append(&group);
+
+    let tpl_list = gtk4::ListBox::new();
+    tpl_list.set_selection_mode(gtk4::SelectionMode::None);
+    tpl_list.add_css_class("boxed-list");
+    group.add(&tpl_list);
+
+    let populate_list = {
+        let tpl_list = tpl_list.clone();
+        let mm = mm.clone();
+        let list_holder = mirror_list_holder.clone();
+        let win = win.clone();
+        move || {
+            while let Some(c) = tpl_list.first_child() {
+                tpl_list.remove(&c);
+            }
+            let templates = templates::MirrorTemplate::list_all();
+            if templates.is_empty() {
+                let row = adw::ActionRow::new();
+                row.set_title(tr!("No Saved Profiles"));
+                row.set_subtitle(tr!("Click 'Save Profile' to save your active mirrorlist configuration."));
+                tpl_list.append(&row);
+                return;
+            }
+            for tpl in templates {
+                let row = adw::ActionRow::new();
+                row.set_title(&tpl.name);
+                let enabled_count = tpl.mirrors.iter().filter(|m| m.enabled).count();
+                row.set_subtitle(&format!("{} • {} {}", tpl.created_at, enabled_count, tr!("mirrors")));
+
+                let load_btn = gtk4::Button::with_label(tr!("Load"));
+                load_btn.add_css_class("flat");
+                load_btn.set_valign(gtk4::Align::Center);
+                {
+                    let mm = mm.clone();
+                    let tpl_mirrors = tpl.mirrors.clone();
+                    let list_holder = list_holder.clone();
+                    let win = win.clone();
+                    load_btn.connect_clicked(move |_| {
+                        let mut mgr = mm.lock().unwrap();
+                        let mut new_mirrors = Vec::new();
+                        for tm in &tpl_mirrors {
+                            new_mirrors.push(crate::mirror_manager::Mirror {
+                                url: tm.url.clone(),
+                                country: tm.country.clone(),
+                                country_code: String::new(),
+                                protocol: tm.protocol.clone(),
+                                speed: None,
+                                last_sync: None,
+                                enabled: tm.enabled,
+                                ipv4: true,
+                                ipv6: false,
+                                completion_pct: None,
+                                score: None,
+                                duration_avg: None,
+                                duration_stddev: None,
+                            });
+                        }
+                        mgr.mirrors = new_mirrors;
+                        if let Some(list) = list_holder.lock().unwrap().as_ref() {
+                            refresh_list_ui(list, &mgr.mirrors);
+                        }
+                        win.destroy();
+                    });
+                }
+                row.add_suffix(&load_btn);
+
+                let del_btn = gtk4::Button::from_icon_name("user-trash-symbolic");
+                del_btn.add_css_class("flat");
+                del_btn.add_css_class("error");
+                del_btn.set_valign(gtk4::Align::Center);
+                {
+                    let tpl_name = tpl.name.clone();
+                    let win = win.clone();
+                    del_btn.connect_clicked(move |_| {
+                        let _ = templates::MirrorTemplate::delete(&tpl_name);
+                        win.destroy();
+                    });
+                }
+                row.add_suffix(&del_btn);
+                tpl_list.append(&row);
+            }
+        }
+    };
+
+    populate_list();
+
+    {
+        let win_parent = win.clone();
+        let mm = mm.clone();
+        save_tpl_btn.connect_clicked(move |_| {
+            let entry = gtk4::Entry::new();
+            entry.set_placeholder_text(Some(tr!("Profile Name (e.g. Fast European Mirrors)")));
+            let dialog = adw::AlertDialog::new(
+                Some(tr!("Save Profile")),
+                Some(tr!("Enter a name for this profile:")),
+            );
+            dialog.set_extra_child(Some(&entry));
+            dialog.add_response("cancel", tr!("Cancel"));
+            dialog.add_response("save", tr!("Save"));
+            dialog.set_response_appearance("save", ResponseAppearance::Suggested);
+
+            let mm = mm.clone();
+            let win_to_destroy = win_parent.clone();
+            dialog.connect_response(None, move |_, response| {
+                if response == "save" {
+                    let name = entry.text();
+                    let mgr = mm.lock().unwrap();
+                    let _ = templates::MirrorTemplate::save(name.as_str(), &mgr.mirrors);
+                    win_to_destroy.destroy();
+                }
+            });
+            dialog.present(Some(&win_parent));
+        });
+    }
+
+    win.present();
+}
+
+fn show_history_window(parent: &adw::ApplicationWindow) {
+    let win = adw::Window::new();
+    win.set_transient_for(Some(parent));
+    win.set_modal(true);
+    win.set_title(Some(tr!("Transaction History")));
+    win.set_default_size(800, 600);
+
+    let toolbar_view = adw::ToolbarView::new();
+    win.set_content(Some(&toolbar_view));
+
+    let header = adw::HeaderBar::new();
+    toolbar_view.add_top_bar(&header);
+
+    let search_entry = gtk4::SearchEntry::new();
+    search_entry.set_placeholder_text(Some(tr!("Search packages...")));
+    header.set_title_widget(Some(&search_entry));
+
+    let main_box = gtk4::Box::new(gtk4::Orientation::Vertical, 6);
+    main_box.set_margin_top(8);
+    main_box.set_margin_bottom(8);
+    main_box.set_margin_start(8);
+    main_box.set_margin_end(8);
+    toolbar_view.set_content(Some(&main_box));
+
+    let scroll = gtk4::ScrolledWindow::new();
+    scroll.set_vexpand(true);
+    main_box.append(&scroll);
+
+    let list_box = gtk4::ListBox::new();
+    list_box.set_selection_mode(gtk4::SelectionMode::None);
+    list_box.add_css_class("boxed-list");
+    scroll.set_child(Some(&list_box));
+
+    let entries = log_viewer::parse_pacman_log();
+
+    fn update_history_list(list_box: &gtk4::ListBox, entries: &[log_viewer::LogEntry], query: &str) {
+        while let Some(c) = list_box.first_child() {
+            list_box.remove(&c);
+        }
+        let query = query.to_lowercase();
+
+        let mut count = 0;
+        for entry in entries {
+            if !query.is_empty()
+                && !entry.package.to_lowercase().contains(&query)
+                && !entry.action.to_lowercase().contains(&query)
+            {
+                continue;
+            }
+            if count >= 200 {
+                break;
+            }
+            count += 1;
+
+            let row = adw::ActionRow::new();
+            row.set_title(&entry.package);
+            row.set_subtitle(&format!("{} • {}", entry.timestamp, entry.version_info));
+
+            let badge = gtk4::Label::new(Some(&entry.action));
+            match entry.action.as_str() {
+                "Installed" => badge.add_css_class("success"),
+                "Upgraded" => badge.add_css_class("accent"),
+                "Removed" => badge.add_css_class("error"),
+                _ => badge.add_css_class("dim-label"),
+            }
+            badge.set_valign(gtk4::Align::Center);
+            row.add_suffix(&badge);
+            list_box.append(&row);
+        }
+    }
+
+    update_history_list(&list_box, &entries, "");
+
+    let list_box_c = list_box.clone();
+    search_entry.connect_search_changed(move |e| {
+        update_history_list(&list_box_c, &entries, e.text().as_str());
+    });
+
+    win.present();
+}
+
 fn main() {
     gtk4::init().expect("Failed to initialize GTK.");
     i18n::init();
@@ -1259,3 +1853,4 @@ fn main() {
 
     app.run();
 }
+

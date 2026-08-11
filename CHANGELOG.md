@@ -5,6 +5,45 @@ All notable changes to MirrorMan will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-08-11
+
+### Security
+- **Helper hardening**: every `mirrorman-helper` method now requires a polkit check tied to the caller's actual process id (no more trusting the sender name alone); each operation maps to a dedicated polkit action (`edit-mirrorlist`, `edit-pacman-conf`, `sync-repos`, `third-party`).
+- **Strict argument allow-lists** shared between client and service (`src/helper_guard.rs`): `pacman` is limited to `-S/-Sy/-Syy/-Su/-Syu/-Syyu/-Sc/-U` plus `--noconfirm/--needed/--refresh/--clean`; `--root`, `--config`, `--dbpath`, `-r` and similar escapes are rejected. `pacman-key` is limited to `--recv-key`/`--lsign-key` with a hex key id and optional `--keyserver`. `cp` is limited to mirrorlist backups under `/etc/pacman.d/`.
+- **Removed arbitrary `bash -c` execution**: BlackArch bootstrap now runs through a dedicated `RunBlackArchStrap` D-Bus method that executes the single pinned, SHA1-verified `strap.sh` script. `bash` and `curl` are no longer reachable via `run_command`.
+- **Client-side validation**: `HelperClient` validates every invocation with the same allow-lists before touching D-Bus or the `pkexec` fallback, so unprivileged code cannot inject arbitrary commands.
+- **Bus policy tightened**: the system bus config now only allows method calls to the `com.parchlinux.mirrorman.Helper` interface and denies signals to the service name.
+
+### Fixed
+- Country filter selection now actually filters mirrors (FlowBox child wrappers were never downcast to the toggle widgets, so the selected-country set was always empty).
+- Repository toggle worker threads no longer block the main thread; all poll-loop state is handled with explicit clones.
+
+### Changed
+- Version bumped to 0.5.1.
+
+## [0.5.0-beta.1] - 2026-07-24
+
+### Added
+- **Mirror Health Dashboard**: Extended Arch API integration with score, completion percentage, and latency stddev metrics.
+- **One-Click Best Setup**: Intelligent multi-country mirror auto-selection algorithm prioritizing high-reliability servers.
+- **Privilege Separation Overhaul**: Replaced `pkexec` invocations with `mirrorman-helper` D-Bus system service (`com.parchlinux.mirrorman.Helper`) and systemd system unit (`mirrorman-helper.service`).
+- **Adaptive Libadwaita Layout**:
+  - `adw::OverlaySplitView` for responsive mobile screens (<600px width) with headerbar toggle button (`sidebar-show-symbolic`).
+  - `adw::BottomSheet` embedded drawer for Pacman Settings with drag handle and auto-opening sheet transition.
+- **Mirrorlist Diff Preview**: Interactive diff window (`show_diff_dialog`) comparing existing vs proposed mirrorlist before saving.
+- **Template Profile Manager**: Save, load, list, and delete custom mirrorlist profiles stored in `~/.config/mirrorman/templates/*.json`.
+- **Transaction History Log Viewer**: Integrated `/var/log/pacman.log` transaction viewer for package install, upgrade, and removal history.
+- **Auto Refresh Timer**: Background systemd timer integration (`mirrorman-refresh.timer` / `mirrorman-refresh.service`) and standalone `mirrorman-cli` binary.
+- **Automated Unit & Integration Test Suite**: 11 unit and integration tests covering mirror ranking, templates, log parsing, CLI, and D-Bus client security.
+
+### Changed
+- Refactored crate structure into a modular Rust library (`src/lib.rs`) sharing logic cleanly across binary targets.
+- Replaced deprecated `adw::AboutWindow` with `adw::AboutDialog`.
+- Updated Persian (`fa`) translation catalog with entries for all v0.5.0 features.
+
+### Security
+- Eliminated raw system shell invocation paths in favor of whitelisted D-Bus IPC methods.
+
 ## [0.4.2] - 2026-07-12
 
 ### Fixed

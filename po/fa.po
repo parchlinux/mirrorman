@@ -519,3 +519,71 @@ msgstr "x86_64"
 #: src/pacman_settings.rs
 msgid "x86_64_v3"
 msgstr "x86_64_v3"
+
+#: src/main.rs
+msgid "Toggle Sidebar"
+msgstr "تغییر وضعیت نوار کناری"
+
+#: src/main.rs
+msgid "Best Setup"
+msgstr "بهترین پیکربندی"
+
+#: src/main.rs
+msgid "Auto-select top optimal mirrors across countries"
+msgstr "انتخاب خودکار بهترین آینه‌ها از کشورهای مختلف"
+
+#: src/main.rs
+msgid "Health"
+msgstr "سلامت"
+
+#: src/main.rs
+msgid "Mirrorlist Templates"
+msgstr "قالب‌های فهرست آینه"
+
+#: src/main.rs
+msgid "Transaction History"
+msgstr "تاریخچه تراکنش‌ها"
+
+#: src/pacman_settings.rs
+msgid "Auto Refresh Timer"
+msgstr "زمان‌بندی بروزرسانی خودکار"
+
+#: src/pacman_settings.rs
+msgid "Automatically update mirrorlist on a systemd timer schedule"
+msgstr "بروزرسانی خودکار فهرست آینه‌ها در جدول زمانی systemd"
+
+#: src/pacman_settings.rs
+msgid "Enable Auto Refresh"
+msgstr "فعال‌سازی بروزرسانی خودکار"
+
+#: src/pacman_settings.rs
+msgid "Run systemd background timer unit (mirrorman-refresh.timer)"
+msgstr "اجرای تایمر پس‌زمینه systemd"
+
+#: src/templates.rs
+msgid "Save Profile"
+msgstr "ذخیره پروفایل"
+
+#: src/templates.rs
+msgid "Profile Name"
+msgstr "نام پروفایل"
+
+#: src/templates.rs
+msgid "Load Profile"
+msgstr "بارگذاری پروفایل"
+
+#: src/templates.rs
+msgid "Delete Profile"
+msgstr "حذف پروفایل"
+
+#: src/main.rs
+msgid "Mirrorlist Diff Preview"
+msgstr "پیش‌نمایش تغییرات فهرست آینه"
+
+#: src/mirror_manager.rs
+msgid "Score"
+msgstr "امتیاز"
+
+#: src/mirror_manager.rs
+msgid "Reliability"
+msgstr "قابلیت اطمینان"

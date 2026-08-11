@@ -1,0 +1,9 @@
+[Unit]
+Description=Mirrorman Auto Refresh Mirrors Timer
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+
+[Install]
+WantedBy=timers.target

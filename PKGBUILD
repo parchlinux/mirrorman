@@ -1,7 +1,7 @@
 # Maintainer: Parch GNU/Linux Team
 
 pkgname=mirrorman
-pkgver=0.4.1
+pkgver=0.5.1
 pkgrel=1
 pkgdesc="Pacman mirror and repository manager for Parch Linux"
 arch=('x86_64')
@@ -11,14 +11,13 @@ depends=(
   'gtk4'
   'libadwaita'
   'glib2'
-  'libsoup3'
   'polkit'
   'pacman'
   'gettext'
 )
-makedepends=('cargo')
+makedepends=('cargo' 'git')
 source=(
-  "git+https://github.com/parchlinux/mirrorman.git#tag=v$pkgver"
+  "git+https://github.com/parchlinux/mirrorman.git#branch=dev"
 )
 sha256sums=('SKIP')
 
@@ -30,6 +29,7 @@ build() {
   cd "$srcdir/mirrorman"
   cargo build --release
   msgfmt po/fa.po -o locale/fa/LC_MESSAGES/mirrorman.mo
+  gzip -9 -n -c man/mirrorman-cli.1 > man/mirrorman-cli.1.gz
 }
 
 package() {
@@ -37,6 +37,15 @@ package() {
 
   install -Dm755 "target/release/mirrorman" \
     "$pkgdir/usr/bin/mirrorman"
+
+  install -Dm755 "target/release/mirrorman-helper" \
+    "$pkgdir/usr/bin/mirrorman-helper"
+
+  install -Dm755 "target/release/mirrorman-cli" \
+    "$pkgdir/usr/bin/mirrorman-cli"
+
+  install -Dm644 "man/mirrorman-cli.1.gz" \
+    "$pkgdir/usr/share/man/man1/mirrorman-cli.1.gz"
 
   install -Dm644 "data/com.parchlinux.mirrorman.desktop" \
     "$pkgdir/usr/share/applications/com.parchlinux.mirrorman.desktop"
@@ -46,6 +55,21 @@ package() {
 
   install -Dm644 "data/com.parchlinux.mirrorman.policy" \
     "$pkgdir/usr/share/polkit-1/actions/com.parchlinux.mirrorman.policy"
+
+  install -Dm644 "data/com.parchlinux.mirrorman.Helper.service" \
+    "$pkgdir/usr/share/dbus-1/system-services/com.parchlinux.mirrorman.Helper.service"
+
+  install -Dm644 "data/com.parchlinux.mirrorman-helper.conf" \
+    "$pkgdir/usr/share/dbus-1/system.d/com.parchlinux.mirrorman-helper.conf"
+
+  install -Dm644 "data/mirrorman-helper.service" \
+    "$pkgdir/usr/lib/systemd/system/mirrorman-helper.service"
+
+  install -Dm644 "data/mirrorman-refresh.service" \
+    "$pkgdir/usr/lib/systemd/user/mirrorman-refresh.service"
+
+  install -Dm644 "data/mirrorman-refresh.timer" \
+    "$pkgdir/usr/lib/systemd/user/mirrorman-refresh.timer"
 
   install -Dm644 "locale/fa/LC_MESSAGES/mirrorman.mo" \
     "$pkgdir/usr/share/locale/fa/LC_MESSAGES/mirrorman.mo"

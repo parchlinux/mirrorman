@@ -1,0 +1,14 @@
+[Unit]
+Description=Parch Repository Manager D-Bus Helper Service
+Documentation=https://github.com/parchlinux/mirrorman
+After=network.target dbus.service
+
+[Service]
+Type=dbus
+BusName=com.parchlinux.mirrorman.Helper
+ExecStart=/usr/bin/mirrorman-helper
+Restart=on-failure
+RestartSec=3s
+
+[Install]
+WantedBy=multi-user.target
