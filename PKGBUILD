@@ -15,21 +15,17 @@ depends=(
   'pacman'
   'gettext'
 )
-makedepends=('cargo' 'git')
+makedepends=('cargo' 'git' 'gettext')
 source=(
   "git+https://github.com/parchlinux/mirrorman.git#branch=dev"
 )
 sha256sums=('SKIP')
 
-prepare() {
-  cd "$srcdir/mirrorman"
-}
-
 build() {
   cd "$srcdir/mirrorman"
-  cargo build --release
-  msgfmt po/fa.po -o locale/fa/LC_MESSAGES/mirrorman.mo
-  gzip -9 -n -c man/mirrorman-cli.1 > man/mirrorman-cli.1.gz
+  cargo build --workspace --release
+  msgfmt assets/po/fa.po -o assets/locale/fa/LC_MESSAGES/mirrorman.mo
+  gzip -9 -n -c assets/man/mirrorman-cli.1 > assets/man/mirrorman-cli.1.gz
 }
 
 package() {
@@ -44,33 +40,33 @@ package() {
   install -Dm755 "target/release/mirrorman-cli" \
     "$pkgdir/usr/bin/mirrorman-cli"
 
-  install -Dm644 "man/mirrorman-cli.1.gz" \
+  install -Dm644 "assets/man/mirrorman-cli.1.gz" \
     "$pkgdir/usr/share/man/man1/mirrorman-cli.1.gz"
 
-  install -Dm644 "data/com.parchlinux.mirrorman.desktop" \
+  install -Dm644 "assets/data/com.parchlinux.mirrorman.desktop" \
     "$pkgdir/usr/share/applications/com.parchlinux.mirrorman.desktop"
 
-  install -Dm644 "data/com.parchlinux.mirrorman.svg" \
+  install -Dm644 "assets/data/com.parchlinux.mirrorman.svg" \
     "$pkgdir/usr/share/icons/hicolor/scalable/apps/com.parchlinux.mirrorman.svg"
 
-  install -Dm644 "data/com.parchlinux.mirrorman.policy" \
+  install -Dm644 "assets/data/com.parchlinux.mirrorman.policy" \
     "$pkgdir/usr/share/polkit-1/actions/com.parchlinux.mirrorman.policy"
 
-  install -Dm644 "data/com.parchlinux.mirrorman.Helper.service" \
+  install -Dm644 "assets/data/com.parchlinux.mirrorman.Helper.service" \
     "$pkgdir/usr/share/dbus-1/system-services/com.parchlinux.mirrorman.Helper.service"
 
-  install -Dm644 "data/com.parchlinux.mirrorman-helper.conf" \
+  install -Dm644 "assets/data/com.parchlinux.mirrorman-helper.conf" \
     "$pkgdir/usr/share/dbus-1/system.d/com.parchlinux.mirrorman-helper.conf"
 
-  install -Dm644 "data/mirrorman-helper.service" \
+  install -Dm644 "assets/data/mirrorman-helper.service" \
     "$pkgdir/usr/lib/systemd/system/mirrorman-helper.service"
 
-  install -Dm644 "data/mirrorman-refresh.service" \
+  install -Dm644 "assets/data/mirrorman-refresh.service" \
     "$pkgdir/usr/lib/systemd/user/mirrorman-refresh.service"
 
-  install -Dm644 "data/mirrorman-refresh.timer" \
+  install -Dm644 "assets/data/mirrorman-refresh.timer" \
     "$pkgdir/usr/lib/systemd/user/mirrorman-refresh.timer"
 
-  install -Dm644 "locale/fa/LC_MESSAGES/mirrorman.mo" \
+  install -Dm644 "assets/locale/fa/LC_MESSAGES/mirrorman.mo" \
     "$pkgdir/usr/share/locale/fa/LC_MESSAGES/mirrorman.mo"
 }

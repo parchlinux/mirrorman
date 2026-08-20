@@ -1,10 +1,10 @@
-use mirrorman::mirror_manager::MirrorManager;
+use mirrorman_core::mirror_manager::MirrorManager;
 
 #[test]
 fn test_cli_auto_optimize_flow() {
     let mut mgr = MirrorManager::new();
     mgr.mirrors = vec![
-        mirrorman::mirror_manager::Mirror {
+        mirrorman_core::mirror_manager::Mirror {
             url: "https://mirror.de/".to_string(),
             country: "Germany".to_string(),
             country_code: "DE".to_string(),
@@ -19,7 +19,7 @@ fn test_cli_auto_optimize_flow() {
             duration_avg: Some(0.1),
             duration_stddev: Some(0.01),
         },
-        mirrorman::mirror_manager::Mirror {
+        mirrorman_core::mirror_manager::Mirror {
             url: "https://mirror.fr/".to_string(),
             country: "France".to_string(),
             country_code: "FR".to_string(),
@@ -46,7 +46,7 @@ fn test_cli_auto_optimize_flow() {
 fn test_cli_mirrorlist_content_generation() {
     let mut mgr = MirrorManager::new();
     mgr.mirrors = vec![
-        mirrorman::mirror_manager::Mirror {
+        mirrorman_core::mirror_manager::Mirror {
             url: "https://mirror.arch.org/".to_string(),
             country: "Worldwide".to_string(),
             country_code: "WW".to_string(),

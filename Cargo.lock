@@ -1373,17 +1373,43 @@ dependencies = [
 name = "mirrorman"
 version = "0.5.1"
 dependencies = [
- "chrono",
- "clap",
- "gettext-rs",
  "glib",
  "gtk4",
  "libadwaita",
+ "mirrorman-core",
+]
+
+[[package]]
+name = "mirrorman-cli"
+version = "0.5.1"
+dependencies = [
+ "chrono",
+ "clap",
+ "mirrorman-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "mirrorman-core"
+version = "0.5.1"
+dependencies = [
+ "chrono",
+ "gettext-rs",
  "once_cell",
  "regex-lite",
  "reqwest",
  "serde",
  "serde_json",
+ "tokio",
+ "zbus",
+]
+
+[[package]]
+name = "mirrorman-helper"
+version = "0.5.1"
+dependencies = [
+ "mirrorman-core",
  "tokio",
  "zbus",
 ]

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::process::Command;
 
-use mirrorman::helper_guard::{
+use mirrorman_core::helper_guard::{
     validate_pacman_args, validate_run_command, BLACKARCH_STRAP_SCRIPT,
 };
 use zbus::{connection::Builder, fdo, interface, Connection, MessageHeader, zvariant};

@@ -1,4 +1,4 @@
-use crate::mirror_manager::{Mirror, MirrorManager};
+use mirrorman_core::mirror_manager::{Mirror, MirrorManager};
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -174,7 +174,7 @@ pub fn do_save(mgr: &MirrorManager, force: bool) -> Result<(), String> {
                 .to_string(),
         );
     }
-    crate::helper_client::HelperClient::save_mirrorlist(&mgr.generate_mirrorlist_content())
+    mirrorman_core::helper_client::HelperClient::save_mirrorlist(&mgr.generate_mirrorlist_content())
 }
 
 fn print_mirror_table(mirrors: &[Mirror]) {
@@ -314,7 +314,7 @@ pub fn execute(cli: Cli) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mirror_manager::Mirror;
+    use mirrorman_core::mirror_manager::Mirror;
 
     fn sample_mirror(enabled: bool) -> Mirror {
         Mirror {

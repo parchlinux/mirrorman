@@ -1,0 +1,13 @@
+[package]
+name = "mirrorman-helper"
+version = "0.5.1"
+edition = "2021"
+
+[[bin]]
+name = "mirrorman-helper"
+path = "src/main.rs"
+
+[dependencies]
+mirrorman-core = { path = "../mirrorman-core" }
+zbus = { version = "4", features = ["tokio"] }
+tokio = { version = "1", features = ["full"] }

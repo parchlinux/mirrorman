@@ -61,6 +61,10 @@ fn detect_locale_dir() -> String {
                 if !candidates.contains(&candidate) {
                     candidates.push(candidate);
                 }
+                let candidate = ancestor.join("assets").join("locale");
+                if !candidates.contains(&candidate) {
+                    candidates.push(candidate);
+                }
             }
         }
     }
@@ -68,6 +72,10 @@ fn detect_locale_dir() -> String {
     // Current working directory (running from project root)
     if let Ok(cwd) = std::env::current_dir() {
         let candidate = cwd.join("locale");
+        if !candidates.contains(&candidate) {
+            candidates.push(candidate);
+        }
+        let candidate = cwd.join("assets").join("locale");
         if !candidates.contains(&candidate) {
             candidates.push(candidate);
         }

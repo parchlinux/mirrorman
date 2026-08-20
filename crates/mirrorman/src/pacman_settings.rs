@@ -1,4 +1,4 @@
-use crate::tr;
+use mirrorman_core::tr;
 use adw::prelude::*;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -353,7 +353,7 @@ fn save_pacman_config(cfg: &PacmanConfig) -> Result<(), String> {
     }
 
     let result = new_lines.join("\n") + "\n";
-    crate::helper_client::HelperClient::save_pacman_conf(&result)
+    mirrorman_core::helper_client::HelperClient::save_pacman_conf(&result)
 }
 
 fn line_key(line: &str) -> String {

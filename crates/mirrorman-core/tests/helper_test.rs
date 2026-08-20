@@ -1,5 +1,5 @@
-use mirrorman::helper_client::HelperClient;
-use mirrorman::helper_guard::{
+use mirrorman_core::helper_client::HelperClient;
+use mirrorman_core::helper_guard::{
     validate_pacman_args, validate_pacman_key_args, validate_run_command,
 };
 

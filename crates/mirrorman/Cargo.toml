@@ -1,0 +1,14 @@
+[package]
+name = "mirrorman"
+version = "0.5.1"
+edition = "2021"
+
+[[bin]]
+name = "mirrorman"
+path = "src/main.rs"
+
+[dependencies]
+mirrorman-core = { path = "../mirrorman-core" }
+gtk4 = { version = "0.9", features = ["v4_16"] }
+adw = { version = "0.7", package = "libadwaita", features = ["v1_6"] }
+glib = "0.20"

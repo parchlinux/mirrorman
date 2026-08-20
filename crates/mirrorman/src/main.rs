@@ -1,12 +1,13 @@
-use mirrorman::i18n;
-use mirrorman::log_viewer;
-use mirrorman::mirror_manager;
-use mirrorman::pacman_settings;
-use mirrorman::repo_config;
-use mirrorman::sync_manager;
-use mirrorman::templates;
-use mirrorman::tr;
-use mirrorman::utils;
+mod pacman_settings;
+
+use mirrorman_core::i18n;
+use mirrorman_core::log_viewer;
+use mirrorman_core::mirror_manager;
+use mirrorman_core::repo_config;
+use mirrorman_core::sync_manager;
+use mirrorman_core::templates;
+use mirrorman_core::tr;
+use mirrorman_core::utils;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -1683,7 +1684,7 @@ fn show_templates_dialog(
                         let mut mgr = mm.lock().unwrap();
                         let mut new_mirrors = Vec::new();
                         for tm in &tpl_mirrors {
-                            new_mirrors.push(crate::mirror_manager::Mirror {
+                            new_mirrors.push(mirrorman_core::mirror_manager::Mirror {
                                 url: tm.url.clone(),
                                 country: tm.country.clone(),
                                 country_code: String::new(),
