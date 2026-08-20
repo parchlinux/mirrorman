@@ -34,7 +34,15 @@ pub fn country_flag(code: &str) -> String {
 
 /// Builds the URL used to time a mirror (downloads a small repo database).
 pub fn speed_test_url(url: &str) -> String {
-    format!("{}/core/os/x86_64/core.db", url.trim_end_matches('/'))
+    let arch = std::env::consts::ARCH;
+    let arch_str = match arch {
+        "x86_64" => "x86_64",
+        "aarch64" => "aarch64",
+        "armv7h" | "armv7hl" => "armv7h",
+        "i686" => "i686",
+        _ => "x86_64",
+    };
+    format!("{}/core/os/{arch_str}/core.db", url.trim_end_matches('/'))
 }
 
 /// Builds the URL used for a cheap HEAD availability probe.
@@ -64,7 +72,7 @@ struct ApiMirror {
 }
 
 const API_URL: &str = "https://archlinux.org/mirrors/status/json/";
-const USER_AGENT: &str = "mirrorman/0.4.2";
+const USER_AGENT: &str = "mirrorman/0.5.2";
 const MIRRORLIST_FILE: &str = "/etc/pacman.d/mirrorlist";
 pub const MIRRORLIST_BACKUP: &str = "/etc/pacman.d/mirrorlist.backup";
 
@@ -276,11 +284,11 @@ impl MirrorManager {
                     Ok(resp) => {
                         let _ = resp.bytes();
                         let elapsed = start.elapsed().as_secs_f64() * 1000.0;
-                        results.lock().unwrap().push((idx, Some(elapsed)));
+                        results.lock().unwrap_or_else(|e| e.into_inner()).push((idx, Some(elapsed)));
                         Some(elapsed)
                     }
                     Err(_) => {
-                        results.lock().unwrap().push((idx, None));
+                        results.lock().unwrap_or_else(|e| e.into_inner()).push((idx, None));
                         None
                     }
                 }
@@ -299,7 +307,7 @@ impl MirrorManager {
             let _ = h.join();
         }
 
-        let final_results = results.lock().unwrap();
+        let final_results = results.lock().unwrap_or_else(|e| e.into_inner());
         for &(idx, speed) in final_results.iter() {
             if idx < mirrors.len() {
                 mirrors[idx].speed = speed;
@@ -337,15 +345,15 @@ impl MirrorManager {
                     Ok(resp) => {
                         let elapsed = start.elapsed().as_secs_f64() * 1000.0;
                         if resp.status().is_success() || resp.status().as_u16() < 400 {
-                            results.lock().unwrap().push((idx, Some(elapsed)));
+                            results.lock().unwrap_or_else(|e| e.into_inner()).push((idx, Some(elapsed)));
                             Some(elapsed)
                         } else {
-                            results.lock().unwrap().push((idx, None));
+                            results.lock().unwrap_or_else(|e| e.into_inner()).push((idx, None));
                             None
                         }
                     }
                     Err(_) => {
-                        results.lock().unwrap().push((idx, None));
+                        results.lock().unwrap_or_else(|e| e.into_inner()).push((idx, None));
                         None
                     }
                 }
@@ -360,7 +368,7 @@ impl MirrorManager {
 
         for h in handles.drain(..) { let _ = h.join(); }
 
-        let final_results = results.lock().unwrap();
+        let final_results = results.lock().unwrap_or_else(|e| e.into_inner());
         for &(idx, speed) in final_results.iter() {
             if idx < mirrors.len() {
                 mirrors[idx].speed = speed;

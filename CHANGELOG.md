@@ -5,6 +5,43 @@ All notable changes to MirrorMan will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-08-21
+
+### Security
+- **SHA256 verification for BlackArch strap.sh** — replaced SHA1 hash check with SHA256 (`58ce783c...`), eliminating collision risk.
+- **Mutex poisoning recovery** — all `.lock().unwrap()` calls replaced with `.lock().unwrap_or_else(|e| e.into_inner())` so the GUI stays responsive even after a panicked thread.
+- **tempfile for fallback files** — hardcoded `/tmp/mirrorman_*` paths replaced with `tempfile::NamedTempFile` (auto-cleaned, race-condition safe).
+
+### Added
+- **Mirror search/filter** — new SearchEntry above the mirror list filters by URL, country, and protocol in real time.
+- **Enable All / Disable All** — bulk toggle buttons in the mirror toolbar.
+- **Sort by Reliability** — new dropdown option alongside Speed, Health, Country, Age.
+- **Remove repository** — `RepoConfig::remove_repository()` strips a custom repo section from pacman.conf with proper rollback.
+- **Configurable auto-refresh timer** — sidebar switch + interval selector (5 min / 15 min / 30 min / 1 h / 2 h / 6 h).
+- **Toast notifications** — non-blocking `adw::Toast` feedback for copy, sync, save, and cache operations.
+- **Keyboard shortcuts** — Ctrl+R (refresh), Ctrl+S (sync), Ctrl+F (focus search).
+- **Window state persistence** — window geometry saved to `~/.config/mirrorman/window-state` and restored on launch.
+- **CLI: `backup`** — timestamped mirrorlist backup via CLI.
+- **CLI: `clean`** — `paccache` wrapper with `--keep` and `--dry-run`.
+- **CLI: `sync`** — save mirrorlist + `pacman -Sy` in one step.
+- **CLI: `diff`** — show diff between current and proposed mirrorlist.
+- **CLI: `test-mirror <url>`** — speed-test a single mirror URL.
+- **CLI: `export -o <path>`** — export mirrorlist to file or stdout.
+- **CLI: `completions <shell>`** — generate shell completions (bash/zsh/fish).
+- **Arch-aware speed test URL** — detects `aarch64`, `armv7h`, `i686`, `x86_64` instead of hardcoding x86_64.
+- **Backup rotation** — keeps 10 most recent mirrorlist backups, prunes oldest automatically.
+- **AppStream metainfo.xml** — proper Linux app store metadata with release notes.
+- **Desktop keywords expanded** — added update, sync, cache, ranking.
+- **Polkit action for cache clean** — `com.parchlinux.mirrorman.clean-cache` added to policy.
+
+### Fixed
+- `toggle_repo_text` panic when snippet is `None` and section already enabled.
+- Stale `USER_AGENT` header still referencing 0.4.2.
+
+### Changed
+- Bumped to version 0.5.2 across all crates, PKGBUILD, man page, and about dialog.
+- 58 unit tests passing (13 pacman_settings, 13 toggle/remove, 8 cli, 14 core, 8 integration, 2 helper).
+
 ## [0.5.1] - 2026-08-11
 
 ### Security

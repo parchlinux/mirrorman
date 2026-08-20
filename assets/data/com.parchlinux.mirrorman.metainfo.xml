@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.parchlinux.mirrorman</id>
+  <metadata_license>MIT</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>MirrorMan</name>
+  <summary>Pacman mirror and repository manager</summary>
+  <description>
+    <p>
+      MirrorMan is a graphical and command-line tool for managing Pacman mirrors
+      and repositories on Arch-based Linux distributions. It provides:
+    </p>
+    <ul>
+      <li>Fetch and rank mirrors by speed, health, and sync status</li>
+      <li>Auto-optimal mirror selection across multiple countries</li>
+      <li>Enable/disable standard and third-party repositories</li>
+      <li>Backup, diff, and restore mirrorlist configurations</li>
+      <li>Pacman settings editor</li>
+      <li>Package cache cleaning</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">com.parchlinux.mirrorman.desktop</launchable>
+  <url type="homepage">https://github.com/parchlinux/mirrorman</url>
+  <url type="bugtracker">https://github.com/parchlinux/mirrorman/issues</url>
+  <developer id="com.parchlinux">
+    <name>Parch Linux</name>
+  </developer>
+  <provides>
+    <binary>mirrorman</binary>
+    <binary>mirrorman-cli</binary>
+  </provides>
+  <categories>
+    <category>System</category>
+    <category>PackageManager</category>
+  </categories>
+  <keywords>
+    <keyword>mirror</keyword>
+    <keyword>pacman</keyword>
+    <keyword>package</keyword>
+    <keyword>repository</keyword>
+    <keyword>update</keyword>
+    <keyword>sync</keyword>
+    <keyword>cache</keyword>
+    <keyword>ranking</keyword>
+  </keywords>
+  <releases>
+    <release version="0.5.2" date="2026-08-21">
+      <description>
+        <p>Stabilization and feature release:</p>
+        <ul>
+          <li>SHA256 verification for BlackArch strap.sh</li>
+          <li>GUI search/filter, Enable All/Disable All</li>
+          <li>CLI backup, clean, sync, diff, export, completions</li>
+          <li>Arch-aware speed test URL</li>
+          <li>Configurable auto-refresh timer</li>
+          <li>Window state persistence</li>
+          <li>Keyboard shortcuts (Ctrl+R, Ctrl+S, Ctrl+F)</li>
+          <li>Backup rotation (keeps 10 most recent)</li>
+        </ul>
+      </description>
+    </release>
+  </releases>
+</component>

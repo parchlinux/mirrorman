@@ -92,14 +92,14 @@ fn detect_locale_dir() -> String {
 }
 
 pub fn tr(s: &'static str) -> &'static str {
-    let cache = CACHE.read().unwrap();
+    let cache = CACHE.read().unwrap_or_else(|e| e.into_inner());
     if let Some(&v) = cache.get(s) {
         return v;
     }
     drop(cache);
     let translated = gettextrs::gettext(s);
     let leaked: &'static str = Box::leak(translated.into_boxed_str());
-    let mut cache = CACHE.write().unwrap();
+    let mut cache = CACHE.write().unwrap_or_else(|e| e.into_inner());
     cache.insert(s, leaked);
     leaked
 }

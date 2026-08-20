@@ -46,15 +46,16 @@ impl RepoConfig {
             Err(_) => return,
         };
 
-        let repo_pattern = regex_lite::Regex::new(r"^\s*(#?)\s*\[([^\]]+)\]").unwrap();
+        let repo_pattern = regex_lite::Regex::new(r"^\s*(#?)\s*\[([^\]]+)\]")
+            .expect("valid regex");
 
         for line in content.lines() {
             if let Some(caps) = repo_pattern.captures(line) {
-                let repo_name = caps.get(2).unwrap().as_str().to_string();
+                let repo_name = caps.get(2).expect("regex capture group 2").as_str().to_string();
                 if repo_name == "options" {
                     continue;
                 }
-                let is_commented = caps.get(1).unwrap().as_str() == "#";
+                let is_commented = caps.get(1).expect("regex capture group 1").as_str() == "#";
                 let enabled = !is_commented;
 
                 if self.repositories.contains_key(&repo_name) {
@@ -114,6 +115,22 @@ impl RepoConfig {
         Ok(())
     }
 
+    pub fn remove_repository(&mut self, repo_name: &str) -> Result<(), String> {
+        if !self.custom_repos.iter().any(|r| r == repo_name) {
+            return Err(format!("'{repo_name}' is not a custom repository"));
+        }
+
+        let config_text = std::fs::read_to_string(self.pacman_conf)
+            .map_err(|e| format!("Failed to read pacman.conf: {e}"))?;
+
+        let modified = remove_repo_text(&config_text, repo_name);
+        crate::helper_client::HelperClient::save_pacman_conf(&modified)?;
+
+        self.repositories.remove(repo_name);
+        self.custom_repos.retain(|r| r != repo_name);
+        Ok(())
+    }
+
     pub fn enable_third_party(&self, repo_name: &str) -> Result<(), String> {
         match repo_name {
             "chaotic-aur" => enable_chaotic_aur(),
@@ -139,10 +156,12 @@ fn toggle_repo_text(config_text: &str, repo_name: &str, enable: bool, section_sn
             in_section = true;
             if enable {
                 new_lines.push(line.trim_start_matches('#').to_string());
-                // Add replacement lines from snippet
-                for sl in &snippet_lines[1..] {
-                    if sl.starts_with("Include =") || sl.starts_with("Server =") || sl.starts_with("SigLevel =") {
-                        new_lines.push(sl.to_string());
+                // Add replacement lines from snippet (skip the header line)
+                if snippet_lines.len() > 1 {
+                    for sl in &snippet_lines[1..] {
+                        if sl.starts_with("Include =") || sl.starts_with("Server =") || sl.starts_with("SigLevel =") {
+                            new_lines.push(sl.to_string());
+                        }
                     }
                 }
             } else {
@@ -191,6 +210,44 @@ fn toggle_repo_text(config_text: &str, repo_name: &str, enable: bool, section_sn
         }
     }
 
+    new_lines.push(String::new());
+    new_lines.join("\n")
+}
+
+fn remove_repo_text(config_text: &str, repo_name: &str) -> String {
+    let section_header = format!("[{repo_name}]");
+    let mut new_lines = Vec::new();
+    let mut in_section = false;
+    let mut skip_next_blank = false;
+
+    for line in config_text.lines() {
+        let stripped = line.trim();
+        let header_check = stripped.trim_start_matches('#').trim();
+        if header_check == section_header {
+            in_section = true;
+            skip_next_blank = true;
+            continue;
+        }
+
+        if in_section {
+            let header_uncommented = stripped.trim_start_matches('#').trim();
+            if header_uncommented.starts_with('[') && header_uncommented != section_header {
+                in_section = false;
+                if skip_next_blank && new_lines.last().map_or(false, |l: &String| l.is_empty()) {
+                    new_lines.pop();
+                }
+                new_lines.push(line.to_string());
+                continue;
+            }
+            continue;
+        }
+
+        new_lines.push(line.to_string());
+    }
+
+    if skip_next_blank && new_lines.last().map_or(false, |l: &String| l.is_empty()) {
+        new_lines.pop();
+    }
     new_lines.push(String::new());
     new_lines.join("\n")
 }
@@ -273,5 +330,122 @@ fn run_cmd(command: &str, args: &[&str]) -> Result<(), String> {
         } else {
             Err(format!("Command '{command}' failed: {stderr}"))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn toggle_enable_commented_section() {
+        let config = "[options]\n#ParallelDownloads = 5\n\n#[core]\nInclude = /etc/pacman.d/mirrorlist\n\n[extra]\nInclude = /etc/pacman.d/mirrorlist\n";
+        let result = toggle_repo_text(config, "core", true, None);
+        assert!(result.contains("[core]"));
+        assert!(!result.contains("#[core]"));
+        assert!(result.contains("Include = /etc/pacman.d/mirrorlist"));
+    }
+
+    #[test]
+    fn toggle_disable_uncommented_section() {
+        let config = "[options]\n\n[core]\nInclude = /etc/pacman.d/mirrorlist\n\n[extra]\nInclude = /etc/pacman.d/mirrorlist\n";
+        let result = toggle_repo_text(config, "core", false, None);
+        assert!(result.contains("#[core]"));
+        assert!(result.contains("#Include = /etc/pacman.d/mirrorlist"));
+    }
+
+    #[test]
+    fn toggle_already_enabled_no_change() {
+        let config = "[options]\n\n[core]\nInclude = /etc/pacman.d/mirrorlist\n";
+        let result = toggle_repo_text(config, "core", true, None);
+        assert!(result.contains("[core]\nInclude = /etc/pacman.d/mirrorlist"));
+    }
+
+    #[test]
+    fn toggle_already_disabled_no_change() {
+        let config = "[options]\n\n#[core]\n#Include = /etc/pacman.d/mirrorlist\n";
+        let result = toggle_repo_text(config, "core", false, None);
+        assert!(result.contains("#[core]"));
+        assert!(result.contains("#Include = /etc/pacman.d/mirrorlist"));
+    }
+
+    #[test]
+    fn toggle_third_party_with_snippet() {
+        let config = "[options]\n\n[core]\nInclude = /etc/pacman.d/mirrorlist\n";
+        let snippet = "[chaotic-aur]\nSigLevel = Optional TrustAll\nInclude = /etc/pacman.d/chaotic-mirrorlist\n";
+        let result = toggle_repo_text(config, "chaotic-aur", true, Some(snippet));
+        assert!(result.contains("[chaotic-aur]"));
+        assert!(result.contains("SigLevel = Optional TrustAll"));
+        assert!(result.contains("Include = /etc/pacman.d/chaotic-mirrorlist"));
+    }
+
+    #[test]
+    fn toggle_nonexistent_section_adds_it() {
+        let config = "[options]\n\n[core]\nInclude = /etc/pacman.d/mirrorlist\n";
+        let snippet = "[myrepo]\nServer = https://example.com/$repo/os/$arch\n";
+        let result = toggle_repo_text(config, "myrepo", true, Some(snippet));
+        assert!(result.contains("[myrepo]"));
+        assert!(result.contains("Server = https://example.com/$repo/os/$arch"));
+    }
+
+    #[test]
+    fn toggle_preserves_other_sections() {
+        let config = "[options]\n\n[core]\nInclude = /etc/pacman.d/mirrorlist\n\n[extra]\nInclude = /etc/pacman.d/mirrorlist\n\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n";
+        let result = toggle_repo_text(config, "core", false, None);
+        assert!(result.contains("[extra]\nInclude = /etc/pacman.d/mirrorlist"));
+        assert!(result.contains("[multilib]\nInclude = /etc/pacman.d/mirrorlist"));
+    }
+
+    #[test]
+    fn toggle_with_siglevel() {
+        let config = "[options]\n\n[core]\nInclude = /etc/pacman.d/mirrorlist\n";
+        let snippet = "[myrepo]\nSigLevel = Required\nServer = https://example.com/\n";
+        let result = toggle_repo_text(config, "myrepo", true, Some(snippet));
+        assert!(result.contains("SigLevel = Required"));
+        assert!(result.contains("Server = https://example.com/"));
+    }
+
+    // --- remove_repo_text tests ---
+
+    #[test]
+    fn remove_existing_repo() {
+        let config = "[options]\n\n[core]\nInclude = /etc/pacman.d/mirrorlist\n\n[extra]\nInclude = /etc/pacman.d/mirrorlist\n\n[chaotic-aur]\nSigLevel = Optional TrustAll\nInclude = /etc/pacman.d/chaotic-mirrorlist\n";
+        let result = remove_repo_text(config, "chaotic-aur");
+        assert!(!result.contains("[chaotic-aur]"));
+        assert!(!result.contains("chaotic-mirrorlist"));
+        assert!(result.contains("[core]\nInclude = /etc/pacman.d/mirrorlist"));
+        assert!(result.contains("[extra]\nInclude = /etc/pacman.d/mirrorlist"));
+    }
+
+    #[test]
+    fn remove_repo_preserves_surrounding() {
+        let config = "[options]\n\n[core]\nInclude = /etc/pacman.d/mirrorlist\n\n[myrepo]\nServer = https://example.com/\n\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n";
+        let result = remove_repo_text(config, "myrepo");
+        assert!(!result.contains("[myrepo]"));
+        assert!(result.contains("[core]\nInclude = /etc/pacman.d/mirrorlist"));
+        assert!(result.contains("[multilib]\nInclude = /etc/pacman.d/mirrorlist"));
+    }
+
+    #[test]
+    fn remove_nonexistent_repo_unchanged() {
+        let config = "[options]\n\n[core]\nInclude = /etc/pacman.d/mirrorlist\n";
+        let result = remove_repo_text(config, "nonexistent");
+        assert_eq!(result.trim(), config.trim());
+    }
+
+    #[test]
+    fn remove_commented_section() {
+        let config = "[options]\n\n#[chaotic-aur]\n#SigLevel = Optional TrustAll\n#Include = /etc/pacman.d/chaotic-mirrorlist\n\n[core]\nInclude = /etc/pacman.d/mirrorlist\n";
+        let result = remove_repo_text(config, "chaotic-aur");
+        assert!(!result.contains("chaotic-aur"));
+        assert!(result.contains("[core]\nInclude = /etc/pacman.d/mirrorlist"));
+    }
+
+    #[test]
+    fn remove_repo_at_end() {
+        let config = "[options]\n\n[core]\nInclude = /etc/pacman.d/mirrorlist\n\n[myrepo]\nServer = https://example.com/\n";
+        let result = remove_repo_text(config, "myrepo");
+        assert!(!result.contains("[myrepo]"));
+        assert!(result.contains("[core]\nInclude = /etc/pacman.d/mirrorlist"));
     }
 }

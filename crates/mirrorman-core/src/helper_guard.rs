@@ -108,9 +108,9 @@ pub fn validate_run_command(command: &str, args: &[String]) -> Result<(), String
 }
 
 /// The exact, pinned BlackArch bootstrap script. It downloads `strap.sh`,
-/// verifies its SHA1, and runs it — all with fixed arguments, so it is safe to
+/// verifies its SHA256, and runs it — all with fixed arguments, so it is safe to
 /// allow as a dedicated operation rather than as arbitrary `bash -c`.
-pub const BLACKARCH_STRAP_SCRIPT: &str = "cd /tmp && curl -O https://blackarch.org/strap.sh && echo '26849980b35a42e6e192c6d9ed8c46f0d6d06047  strap.sh' | sha1sum -c && chmod +x strap.sh && ./strap.sh && rm -f strap.sh";
+pub const BLACKARCH_STRAP_SCRIPT: &str = "cd /tmp && curl -O https://blackarch.org/strap.sh && echo '58ce783cf584d9000d42f78b51780e0b58fb2d1671abf9bca1f2a486d5368dd4  strap.sh' | sha256sum -c && chmod +x strap.sh && ./strap.sh && rm -f strap.sh";
 
 #[cfg(test)]
 mod tests {

@@ -1,6 +1,6 @@
 [package]
 name = "mirrorman-core"
-version = "0.5.1"
+version = "0.5.2"
 edition = "2021"
 
 [lib]
@@ -17,3 +17,4 @@ regex-lite = "0.1"
 gettext-rs = { version = "0.7", features = ["gettext-system"] }
 zbus = { version = "4", features = ["tokio"] }
 tokio = { version = "1", features = ["full"] }
+tempfile = "3"

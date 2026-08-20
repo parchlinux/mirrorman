@@ -129,7 +129,7 @@ fn connect_repo_switch(
     registry: &Arc<Mutex<HashMap<String, SwitchState>>>,
 ) {
     let busy = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    registry.lock().unwrap().insert(
+    registry.lock().unwrap_or_else(|e| e.into_inner()).insert(
         name.to_string(),
         SwitchState { sw: sw.clone(), busy: busy.clone() },
     );
@@ -137,7 +137,7 @@ fn connect_repo_switch(
     let registry_c = registry.clone();
     let name_c = name.to_string();
     sw.connect_state_set(move |_, active| {
-        let state = registry_c.lock().unwrap().get(&name_c).cloned();
+        let state = registry_c.lock().unwrap_or_else(|e| e.into_inner()).get(&name_c).cloned();
         let state = match state {
             Some(s) => s,
             None => return glib::Propagation::Proceed,
@@ -156,10 +156,10 @@ fn connect_repo_switch(
         std::thread::spawn(move || {
             let outcome: Result<(), String> = (|| {
                 if is_third && active_c {
-                    let cfg = rc.lock().unwrap();
+                    let cfg = rc.lock().unwrap_or_else(|e| e.into_inner());
                     cfg.enable_third_party(&name)?;
                 }
-                let mut cfg = rc.lock().unwrap();
+                let mut cfg = rc.lock().unwrap_or_else(|e| e.into_inner());
                 cfg.toggle_repo_in_config(&name, active_c, is_third)
             })();
 
@@ -188,6 +188,7 @@ fn build_ui(app: &adw::Application) {
     let mm = Arc::new(Mutex::new(MirrorManager::new()));
     let rc = Arc::new(Mutex::new(repo_config::RepoConfig::new()));
     let repo_switches: Arc<Mutex<HashMap<String, SwitchState>>> = Arc::new(Mutex::new(HashMap::new()));
+    let search_filter = std::rc::Rc::new(std::cell::RefCell::new(String::new()));
 
     // ── Channel: background threads → main thread ──
     let (tx, rx) = std::sync::mpsc::channel::<String>();
@@ -201,7 +202,9 @@ fn build_ui(app: &adw::Application) {
     bottom_sheet.set_content(Some(&toolbar_view));
     bottom_sheet.set_show_drag_handle(true);
     bottom_sheet.set_modal(true);
-    window.set_content(Some(&bottom_sheet));
+    let toast_overlay = adw::ToastOverlay::new();
+    toast_overlay.set_child(Some(&bottom_sheet));
+    window.set_content(Some(&toast_overlay));
 
     let header = adw::HeaderBar::new();
     toolbar_view.add_top_bar(&header);
@@ -238,6 +241,19 @@ fn build_ui(app: &adw::Application) {
 
     window.set_default_size(960, 640);
     window.set_size_request(360, 480);
+
+    // Restore window state
+    {
+        let state_path = glib::user_config_dir().join("mirrorman").join("window-state");
+        if let Ok(content) = std::fs::read_to_string(&state_path) {
+            let parts: Vec<&str> = content.trim().split(',').collect();
+            if parts.len() == 2 {
+                if let (Ok(w), Ok(h)) = (parts[0].parse::<i32>(), parts[1].parse::<i32>()) {
+                    window.set_default_size(w, h);
+                }
+            }
+        }
+    }
 
     let split_view = adw::OverlaySplitView::new();
     split_view.set_min_sidebar_width(280.0);
@@ -480,6 +496,30 @@ fn build_ui(app: &adw::Application) {
     update_btn.set_tooltip_text(Some(tr!("Update all system packages")));
     sys_grid.attach(&update_btn, 1, 1, 1, 1);
 
+    let auto_refresh_row = adw::ActionRow::new();
+    auto_refresh_row.set_title(tr!("Auto Refresh"));
+    auto_refresh_row.set_subtitle(tr!("Periodically refresh mirror data"));
+    let auto_refresh_switch = gtk4::Switch::new();
+    auto_refresh_switch.set_valign(gtk4::Align::Center);
+    auto_refresh_row.add_suffix(&auto_refresh_switch);
+    sidebar_box.append(&auto_refresh_row);
+
+    let auto_refresh_interval_row = adw::ComboRow::new();
+    auto_refresh_interval_row.set_title(tr!("Refresh Interval"));
+    let interval_model = gtk4::StringList::new(&[
+        tr!("5 minutes"),
+        tr!("15 minutes"),
+        tr!("30 minutes"),
+        tr!("1 hour"),
+        tr!("2 hours"),
+        tr!("6 hours"),
+    ]);
+    auto_refresh_interval_row.set_model(Some(&interval_model));
+    auto_refresh_interval_row.set_sensitive(false);
+    sidebar_box.append(&auto_refresh_interval_row);
+
+    let auto_refresh_source_id: std::rc::Rc<std::cell::Cell<Option<glib::SourceId>>> = std::rc::Rc::new(std::cell::Cell::new(None));
+
     let right_box = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
     right_box.add_css_class("view");
     split_view.set_content(Some(&right_box));
@@ -532,6 +572,7 @@ fn build_ui(app: &adw::Application) {
         &tr!("Health"),
         &tr!("Country"),
         &tr!("Age"),
+        &tr!("Reliability"),
     ]);
     sort_dropdown.set_valign(gtk4::Align::Center);
     sort_dropdown.set_sensitive(false);
@@ -548,6 +589,29 @@ fn build_ui(app: &adw::Application) {
     let share_btn = gtk4::Button::from_icon_name("edit-copy-symbolic");
     share_btn.set_tooltip_text(Some(tr!("Copy mirror configuration to clipboard")));
     mirror_toolbar.append(&share_btn);
+
+    let separator = gtk4::Separator::new(gtk4::Orientation::Vertical);
+    separator.set_margin_start(4);
+    separator.set_margin_end(4);
+    mirror_toolbar.append(&separator);
+
+    let enable_all_btn = gtk4::Button::from_icon_name("document-edit-symbolic");
+    enable_all_btn.set_tooltip_text(Some(tr!("Enable all mirrors")));
+    mirror_toolbar.append(&enable_all_btn);
+
+    let disable_all_btn = gtk4::Button::from_icon_name("window-close-symbolic");
+    disable_all_btn.set_tooltip_text(Some(tr!("Disable all mirrors")));
+    mirror_toolbar.append(&disable_all_btn);
+
+    let search_entry = gtk4::SearchEntry::new();
+    search_entry.set_placeholder_text(Some(tr!("Search mirrors...")));
+    search_entry.set_hexpand(true);
+    search_entry.set_margin_start(6);
+    search_entry.set_margin_end(6);
+    search_entry.set_margin_top(2);
+    search_entry.set_margin_bottom(2);
+    search_entry.set_sensitive(false);
+    right_box.append(&search_entry);
 
     let mirror_scroll = gtk4::ScrolledWindow::new();
     mirror_scroll.set_vexpand(true);
@@ -567,11 +631,11 @@ fn build_ui(app: &adw::Application) {
     mirror_list.set_margin_bottom(12);
     mirror_list.set_margin_start(12);
     mirror_list.set_margin_end(12);
-    *mirror_list_holder.lock().unwrap() = Some(mirror_list.clone());
+    *mirror_list_holder.lock().unwrap_or_else(|e| e.into_inner()) = Some(mirror_list.clone());
 
     // ── Populate repo lists ──
     {
-        let config = rc.lock().unwrap();
+        let config = rc.lock().unwrap_or_else(|e| e.into_inner());
         for name in &config.standard_repos {
             let row = adw::ActionRow::new();
             row.set_title(name);
@@ -600,6 +664,12 @@ fn build_ui(app: &adw::Application) {
         d.add_response("ok", tr!("OK"));
         d.set_response_appearance("ok", adw::ResponseAppearance::Suggested);
         d.present(Some(win));
+    }
+
+    fn toast(win: &adw::ApplicationWindow, msg: &str) {
+        if let Some(overlay) = win.content().and_downcast::<adw::ToastOverlay>() {
+            overlay.add_toast(adw::Toast::new(msg));
+        }
     }
 
     fn alert(win: &adw::ApplicationWindow, title: &str, body: &str) {
@@ -661,6 +731,8 @@ fn build_ui(app: &adw::Application) {
     let rc_h = rc.clone();
     let repo_list_h = repo_list.clone();
     let repo_switches_h = repo_switches.clone();
+    let search_filter_h = search_filter.clone();
+    let l_search_entry = search_entry.clone();
     let _msg_handler = glib::timeout_add_local(
         std::time::Duration::from_millis(100),
         move || {
@@ -670,15 +742,16 @@ fn build_ui(app: &adw::Application) {
                 let rest = parts.get(1).copied().unwrap_or("");
                 match cmd {
                     "fetch_ok" => {
-                        let mgr = mm_arc.lock().unwrap();
-                        if let Some(list) = list_holder.lock().unwrap().as_ref() {
+                        let mgr = mm_arc.lock().unwrap_or_else(|e| e.into_inner());
+                        if let Some(list) = list_holder.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
                             if mgr.mirrors.len() > 0 {
                                 mirror_scroll_h.set_child(Some(list));
                             }
-                            refresh_list_ui(list, &mgr.mirrors);
+                            refresh_list_ui(list, &mgr.mirrors, &search_filter_h.borrow());
                         }
                         let has_mirrors = mgr.mirrors.len() > 0;
                         l_sort_dropdown.set_sensitive(has_mirrors);
+                        l_search_entry.set_sensitive(has_mirrors);
                         set_loading(&l_spinner, &l_label, &l_refresh, &l_hrefresh, &l_rank, &l_sync, &l_clean, &l_avail, &l_http, &l_https, &l_ipv4, &l_ipv6, &l_status, &l_country_row, false, "");
                     }
                     "fetch_err" => {
@@ -686,9 +759,9 @@ fn build_ui(app: &adw::Application) {
                         set_loading(&l_spinner, &l_label, &l_refresh, &l_hrefresh, &l_rank, &l_sync, &l_clean, &l_avail, &l_http, &l_https, &l_ipv4, &l_ipv6, &l_status, &l_country_row, false, "");
                     }
                     "rank_ok" => {
-                        let mgr = mm_arc.lock().unwrap();
-                        if let Some(list) = list_holder.lock().unwrap().as_ref() {
-                            refresh_list_ui(list, &mgr.mirrors);
+                        let mgr = mm_arc.lock().unwrap_or_else(|e| e.into_inner());
+                        if let Some(list) = list_holder.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+                            refresh_list_ui(list, &mgr.mirrors, &search_filter_h.borrow());
                         }
                         set_loading(&l_spinner, &l_label, &l_refresh, &l_hrefresh, &l_rank, &l_sync, &l_clean, &l_avail, &l_http, &l_https, &l_ipv4, &l_ipv6, &l_status, &l_country_row, false, "");
                     }
@@ -708,7 +781,7 @@ fn build_ui(app: &adw::Application) {
                     }
                     "err" => alert(&win, tr!("Error"), rest),
                     "toggle_done" => {
-                        if let Some(state) = repo_switches_h.lock().unwrap().get(rest) {
+                        if let Some(state) = repo_switches_h.lock().unwrap_or_else(|e| e.into_inner()).get(rest) {
                             state.sw.set_sensitive(true);
                             state.busy.store(false, std::sync::atomic::Ordering::SeqCst);
                         }
@@ -717,7 +790,7 @@ fn build_ui(app: &adw::Application) {
                         if let Some((name, rest2)) = rest.split_once(':') {
                             if let Some((revert, msg)) = rest2.split_once(':') {
                                 if let Ok(flag) = revert.parse::<bool>() {
-                                    if let Some(state) = repo_switches_h.lock().unwrap().get(name) {
+                                    if let Some(state) = repo_switches_h.lock().unwrap_or_else(|e| e.into_inner()).get(name) {
                                         state.sw.set_active(flag);
                                         state.sw.set_sensitive(true);
                                         state.busy.store(false, std::sync::atomic::Ordering::SeqCst);
@@ -801,7 +874,7 @@ fn build_ui(app: &adw::Application) {
             let tx = tx.clone();
             let mm = mm.clone();
             std::thread::spawn(move || {
-                let mut mgr = mm.lock().unwrap();
+                let mut mgr = mm.lock().unwrap_or_else(|e| e.into_inner());
                 match mgr.fetch_mirrors(&countries, &protocols, &ip_versions, use_status) {
                     Ok(()) => {
                         let count = mgr.mirrors.len();
@@ -841,7 +914,7 @@ fn build_ui(app: &adw::Application) {
         let country_row = country_row.clone();
 
         rank_btn.clone().connect_clicked(move |_| {
-            let mgr = mm.lock().unwrap();
+            let mgr = mm.lock().unwrap_or_else(|e| e.into_inner());
             let old_mirrors = mgr.mirrors.clone();
             drop(mgr);
 
@@ -861,7 +934,7 @@ fn build_ui(app: &adw::Application) {
                 let mut mirrors = old_mirrors;
                 MirrorManager::test_all_speeds_concurrent(&mut mirrors, 50);
                 {
-                    let mut mgr = mm.lock().unwrap();
+                    let mut mgr = mm.lock().unwrap_or_else(|e| e.into_inner());
                     mgr.mirrors = mirrors;
                     mgr.sort_by_speed();
                 }
@@ -890,7 +963,7 @@ fn build_ui(app: &adw::Application) {
         let country_row = country_row.clone();
 
         avail_btn.clone().connect_clicked(move |_| {
-            let mgr = mm.lock().unwrap();
+            let mgr = mm.lock().unwrap_or_else(|e| e.into_inner());
             if mgr.mirrors.is_empty() { return; }
             let old_mirrors = mgr.mirrors.clone();
             drop(mgr);
@@ -911,7 +984,7 @@ fn build_ui(app: &adw::Application) {
                 let mut mirrors = old_mirrors;
                 MirrorManager::check_mirror_availability(&mut mirrors, 50);
                 {
-                    let mut mgr = mm.lock().unwrap();
+                    let mut mgr = mm.lock().unwrap_or_else(|e| e.into_inner());
                     mgr.mirrors = mirrors;
                 }
                 let _ = tx.send("rank_ok:".to_string());
@@ -927,12 +1000,13 @@ fn build_ui(app: &adw::Application) {
         let win = window.clone();
         let l_sort_dropdown = sort_dropdown.clone();
         let l_rank = rank_btn.clone();
+        let sf = search_filter.clone();
         iran_btn.connect_clicked(move |_| {
-            let mut mgr = mm.lock().unwrap();
+            let mut mgr = mm.lock().unwrap_or_else(|e| e.into_inner());
             mgr.add_iran_mirrors();
             let count = mgr.mirrors.len();
             mirror_scroll.set_child(Some(&mirror_list));
-            refresh_list_ui(&mirror_list, &mgr.mirrors);
+            refresh_list_ui(&mirror_list, &mgr.mirrors, &sf.borrow());
             l_sort_dropdown.set_sensitive(true);
             l_rank.set_sensitive(true);
             inform(&win, tr!("Iran Blackout Added"),
@@ -946,7 +1020,7 @@ fn build_ui(app: &adw::Application) {
         let win = window.clone();
         share_btn.connect_clicked(move |_| {
             let content = {
-                let mgr = mm.lock().unwrap();
+                let mgr = mm.lock().unwrap_or_else(|e| e.into_inner());
                 sync_manager::SyncManager::generate_share_content(&mgr.mirrors)
             };
             if content.is_empty() {
@@ -957,6 +1031,7 @@ fn build_ui(app: &adw::Application) {
                 display.clipboard().set_text(&content);
             }
             inform(&win, tr!("Copied!"), tr!("Mirror configuration copied to clipboard"));
+            toast(&win, tr!("Mirror configuration copied to clipboard"));
         });
     }
 
@@ -966,13 +1041,14 @@ fn build_ui(app: &adw::Application) {
         let mm = mm.clone();
         let list = mirror_list.clone();
         let sel = sel_idx.clone();
+        let sf = search_filter.clone();
         enable_btn.connect_clicked(move |_| {
-            let idx = *sel.lock().unwrap();
+            let idx = *sel.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(idx) = idx {
                 if let Ok(mut mgr) = mm.try_lock() {
                     if idx < mgr.mirrors.len() {
                         mgr.mirrors[idx].enabled = true;
-                        refresh_list_ui(&list, &mgr.mirrors);
+                        refresh_list_ui(&list, &mgr.mirrors, &sf.borrow());
                     }
                 }
             }
@@ -982,13 +1058,14 @@ fn build_ui(app: &adw::Application) {
         let mm = mm.clone();
         let list = mirror_list.clone();
         let sel = sel_idx.clone();
+        let sf = search_filter.clone();
         disable_btn.connect_clicked(move |_| {
-            let idx = *sel.lock().unwrap();
+            let idx = *sel.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(idx) = idx {
                 if let Ok(mut mgr) = mm.try_lock() {
                     if idx < mgr.mirrors.len() {
                         mgr.mirrors[idx].enabled = false;
-                        refresh_list_ui(&list, &mgr.mirrors);
+                        refresh_list_ui(&list, &mgr.mirrors, &sf.borrow());
                     }
                 }
             }
@@ -998,7 +1075,7 @@ fn build_ui(app: &adw::Application) {
     {
         let sel = sel_idx.clone();
         mirror_list.connect_row_selected(move |_, row| {
-            *sel.lock().unwrap() = row.map(|r| r.index() as usize);
+            *sel.lock().unwrap_or_else(|e| e.into_inner()) = row.map(|r| r.index() as usize);
             enable_btn.set_sensitive(row.is_some());
             disable_btn.set_sensitive(row.is_some());
         });
@@ -1008,6 +1085,7 @@ fn build_ui(app: &adw::Application) {
     {
         let mm = mm.clone();
         let list = mirror_list.clone();
+        let sf = search_filter.clone();
         sort_dropdown.connect_selected_notify(move |dd| {
             if let Ok(mut mgr) = mm.try_lock() {
                 match dd.selected() {
@@ -1015,9 +1093,47 @@ fn build_ui(app: &adw::Application) {
                     1 => mgr.sort_by_score(),
                     2 => mgr.sort_by_country(),
                     3 => mgr.sort_by_age(),
+                    4 => mgr.sort_by_reliability(),
                     _ => {}
                 }
-                refresh_list_ui(&list, &mgr.mirrors);
+                refresh_list_ui(&list, &mgr.mirrors, &sf.borrow());
+            }
+        });
+    }
+
+    // ── Enable All / Disable All ──
+    {
+        let mm = mm.clone();
+        let list = mirror_list.clone();
+        let sf = search_filter.clone();
+        enable_all_btn.connect_clicked(move |_| {
+            if let Ok(mut mgr) = mm.try_lock() {
+                for m in &mut mgr.mirrors { m.enabled = true; }
+                refresh_list_ui(&list, &mgr.mirrors, &sf.borrow());
+            }
+        });
+    }
+    {
+        let mm = mm.clone();
+        let list = mirror_list.clone();
+        let sf = search_filter.clone();
+        disable_all_btn.connect_clicked(move |_| {
+            if let Ok(mut mgr) = mm.try_lock() {
+                for m in &mut mgr.mirrors { m.enabled = false; }
+                refresh_list_ui(&list, &mgr.mirrors, &sf.borrow());
+            }
+        });
+    }
+
+    // ── Search filter ──
+    {
+        let mm = mm.clone();
+        let list = mirror_list.clone();
+        let sf = search_filter.clone();
+        search_entry.connect_search_changed(move |entry| {
+            *sf.borrow_mut() = entry.text().to_string();
+            if let Ok(mgr) = mm.try_lock() {
+                refresh_list_ui(&list, &mgr.mirrors, &sf.borrow());
             }
         });
     }
@@ -1030,15 +1146,16 @@ fn build_ui(app: &adw::Application) {
         let mirror_scroll = mirror_scroll.clone();
         let l_sort_dropdown = sort_dropdown.clone();
         let l_rank = rank_btn.clone();
+        let sf = search_filter.clone();
         best_setup_btn.connect_clicked(move |_| {
-            let mut mgr = mm.lock().unwrap();
+            let mut mgr = mm.lock().unwrap_or_else(|e| e.into_inner());
             if mgr.mirrors.is_empty() {
                 alert(&win, tr!("No Mirrors"), tr!("Fetch mirrors first before running Best Setup."));
                 return;
             }
             let selected = mgr.auto_optimize();
             mirror_scroll.set_child(Some(&list));
-            refresh_list_ui(&list, &mgr.mirrors);
+            refresh_list_ui(&list, &mgr.mirrors, &sf.borrow());
             l_sort_dropdown.set_sensitive(true);
             l_rank.set_sensitive(true);
             let mirror_urls: Vec<String> = selected.iter().map(|m| format!("• {} ({})", m.url, m.country)).collect();
@@ -1072,7 +1189,7 @@ fn build_ui(app: &adw::Application) {
         sync_btn.clone().connect_clicked(move |_| {
             let current = MirrorManager::read_current_mirrorlist();
             let proposed = {
-                let mgr = mm.lock().unwrap();
+                let mgr = mm.lock().unwrap_or_else(|e| e.into_inner());
                 mgr.generate_mirrorlist_content()
             };
 
@@ -1138,7 +1255,7 @@ fn build_ui(app: &adw::Application) {
                 std::time::Duration::from_millis(100),
                 move || {
                     progress.pulse();
-                    if let Some(ref msg) = *result_check.lock().unwrap() {
+                    if let Some(ref msg) = *result_check.lock().unwrap_or_else(|e| e.into_inner()) {
                         dialog.close();
                         set_loading(
                             &p_loading_spinner, &p_loading_label,
@@ -1165,7 +1282,7 @@ fn build_ui(app: &adw::Application) {
             let mm = mm.clone();
             std::thread::spawn(move || {
                 let result = {
-                    let mgr = mm.lock().unwrap();
+                    let mgr = mm.lock().unwrap_or_else(|e| e.into_inner());
                     mgr.save_mirrorlist()
                 };
                 let msg = match result {
@@ -1177,7 +1294,7 @@ fn build_ui(app: &adw::Application) {
                     }
                     Err(e) => format!("err:{e}"),
                 };
-                *sync_result.lock().unwrap() = Some(msg);
+                *sync_result.lock().unwrap_or_else(|e| e.into_inner()) = Some(msg);
             });
             });
         });
@@ -1221,7 +1338,7 @@ fn build_ui(app: &adw::Application) {
                 std::time::Duration::from_millis(100),
                 move || {
                     progress.pulse();
-                    if let Some(ref msg) = *result_check.lock().unwrap() {
+                    if let Some(ref msg) = *result_check.lock().unwrap_or_else(|e| e.into_inner()) {
                         dialog.close();
                         if msg == "ok" {
                             inform(&win_c, tr!("Success"), tr!("Package cache cleaned successfully"));
@@ -1240,7 +1357,7 @@ fn build_ui(app: &adw::Application) {
                     Ok(_) => "ok".to_string(),
                     Err(e) => e,
                 };
-                *result.lock().unwrap() = Some(msg);
+                *result.lock().unwrap_or_else(|e| e.into_inner()) = Some(msg);
             });
         });
     }
@@ -1265,7 +1382,7 @@ fn build_ui(app: &adw::Application) {
                 std::time::Duration::from_millis(100),
                 move || {
                     progress.pulse();
-                    if let Some(ref msg) = *result_check.lock().unwrap() {
+                    if let Some(ref msg) = *result_check.lock().unwrap_or_else(|e| e.into_inner()) {
                         dialog.close();
                         if msg == "ok" {
                             inform(&win_c, tr!("Success"), tr!("Mirrorlist backup created successfully"));
@@ -1284,7 +1401,7 @@ fn build_ui(app: &adw::Application) {
                     Ok(_) => "ok".to_string(),
                     Err(e) => e,
                 };
-                *result.lock().unwrap() = Some(msg);
+                *result.lock().unwrap_or_else(|e| e.into_inner()) = Some(msg);
             });
         });
     }
@@ -1351,7 +1468,7 @@ fn build_ui(app: &adw::Application) {
                 let tx = tx.clone();
                 let name = name.clone();
                 std::thread::spawn(move || {
-                    let result = rc.lock().unwrap().add_repository(&name, &url, &siglevel);
+                    let result = rc.lock().unwrap_or_else(|e| e.into_inner()).add_repository(&name, &url, &siglevel);
                     match result {
                         Ok(()) => {
                             let _ = tx.send(format!("repo_added:{name}"));
@@ -1372,8 +1489,9 @@ fn build_ui(app: &adw::Application) {
         let win = window.clone();
         let mm = mm.clone();
         let list_holder = mirror_list_holder.clone();
+        let sf = search_filter.clone();
         templates_btn.connect_clicked(move |_| {
-            show_templates_dialog(&win, mm.clone(), list_holder.clone());
+            show_templates_dialog(&win, mm.clone(), list_holder.clone(), sf.clone());
         });
     }
 
@@ -1400,18 +1518,24 @@ fn build_ui(app: &adw::Application) {
             let a = adw::AboutDialog::new();
             a.set_application_name(tr!("Parch Repository Manager"));
             a.set_application_icon("com.parchlinux.mirrorman");
-            a.set_version("0.5.1");
+            a.set_version("0.5.2");
             a.set_developer_name(tr!("Parch GNU/Linux Team"));
             a.set_website("https://parchlinux.com");
             a.set_copyright(tr!("Copyright 2026 Parch GNU/Linux Team"));
             a.set_license_type(gtk4::License::Gpl30);
             a.set_release_notes(tr!(
-"<p>Version 0.5.1 (2026)</p>
+"<p>Version 0.5.2 (2026)</p>
 <ul>
-<li>Hardened mirrorman-helper: per-method polkit authorization and strict argument allow-lists</li>
-<li>Dedicated RunBlackArchStrap operation replaces arbitrary bash -c execution</li>
-<li>Multi-country mirror selection and country filter fixes</li>
-<li>Mirror health dashboard and one-click best setup from 0.5.0</li>
+<li>SHA256 verification for BlackArch strap.sh (replaces SHA1)</li>
+<li>GUI: mirror search/filter, Enable All / Disable All, sort by Reliability</li>
+<li>GUI: configurable auto-refresh timer (5 min – 6 h)</li>
+<li>GUI: toast notifications, keyboard shortcuts (Ctrl+R / Ctrl+S / Ctrl+F)</li>
+<li>GUI: window geometry persistence across sessions</li>
+<li>CLI: backup, clean, sync, diff, test-mirror, export, shell completions</li>
+<li>Arch-aware speed test URL (aarch64, armv7h, i686, x86_64)</li>
+<li>Backup rotation (keeps 10 most recent, prunes oldest)</li>
+<li>Remove repository support with pacman.conf rollback</li>
+<li>Hardened mirrorman-helper, multi-country filters, mirror health dashboard from 0.5.x</li>
 </ul>"
             ));
             a.present(Some(&win));
@@ -1432,7 +1556,7 @@ fn build_ui(app: &adw::Application) {
             let row = row.downcast::<adw::ActionRow>().expect("ActionRow");
             let row_title = row.title().to_string();
             let name = if is_third {
-                let cfg = rc.lock().unwrap();
+                let cfg = rc.lock().unwrap_or_else(|e| e.into_inner());
                 cfg.third_party_repos.get(i as usize).cloned().unwrap_or(row_title)
             } else {
                 row_title
@@ -1441,6 +1565,104 @@ fn build_ui(app: &adw::Application) {
                 connect_repo_switch(&sw, &name, rc.clone(), tx.clone(), is_third, &repo_switches);
             }
         }
+    }
+
+    // ── Auto-refresh timer ──
+    {
+        let refresh_btn = refresh_btn.clone();
+        let refresh_btn_source = refresh_btn.clone();
+        let auto_refresh_source = auto_refresh_source_id.clone();
+        let interval_row = auto_refresh_interval_row.clone();
+        auto_refresh_switch.connect_state_set(move |_sw, active| {
+            if active {
+                interval_row.set_sensitive(true);
+                let interval_secs = match interval_row.selected() {
+                    0 => 300,
+                    1 => 900,
+                    2 => 1800,
+                    3 => 3600,
+                    4 => 7200,
+                    5 => 21600,
+                    _ => 3600,
+                };
+                let btn = refresh_btn_source.clone();
+                let source = glib::timeout_add_seconds_local(interval_secs, move || {
+                    btn.emit_clicked();
+                    glib::ControlFlow::Continue
+                });
+                auto_refresh_source.set(Some(source));
+            } else {
+                interval_row.set_sensitive(false);
+                if let Some(source) = auto_refresh_source.take() {
+                    source.remove();
+                }
+            }
+            glib::Propagation::Proceed
+        });
+        let auto_refresh_source2 = auto_refresh_source_id.clone();
+        let refresh_btn_source2 = refresh_btn.clone();
+        auto_refresh_interval_row.connect_selected_notify(move |combo| {
+            if auto_refresh_switch.is_active() {
+                if let Some(source) = auto_refresh_source2.take() {
+                    source.remove();
+                }
+                let interval_secs = match combo.selected() {
+                    0 => 300,
+                    1 => 900,
+                    2 => 1800,
+                    3 => 3600,
+                    4 => 7200,
+                    5 => 21600,
+                    _ => 3600,
+                };
+                let btn = refresh_btn_source2.clone();
+                let source = glib::timeout_add_seconds_local(interval_secs, move || {
+                    btn.emit_clicked();
+                    glib::ControlFlow::Continue
+                });
+                auto_refresh_source2.set(Some(source));
+            }
+        });
+    }
+
+    // ── Keyboard shortcuts ──
+    {
+        let key_controller = gtk4::EventControllerKey::new();
+        let refresh_btn_c = refresh_btn.clone();
+        let sync_btn_c = sync_btn.clone();
+        let search_entry_c = search_entry.clone();
+        key_controller.connect_key_pressed(move |_, key, _, modifiers| {
+            if modifiers.contains(gtk4::gdk::ModifierType::CONTROL_MASK) {
+                match key {
+                    gtk4::gdk::Key::r => {
+                        refresh_btn_c.emit_clicked();
+                        return glib::Propagation::Stop;
+                    }
+                    gtk4::gdk::Key::s => {
+                        sync_btn_c.emit_clicked();
+                        return glib::Propagation::Stop;
+                    }
+                    gtk4::gdk::Key::f => {
+                        search_entry_c.grab_focus();
+                        return glib::Propagation::Stop;
+                    }
+                    _ => {}
+                }
+            }
+            glib::Propagation::Proceed
+        });
+        window.add_controller(key_controller);
+    }
+
+    // ── Save window state on close ──
+    {
+        window.connect_close_request(move |w| {
+            let (w, h) = w.default_size();
+            let state_dir = glib::user_config_dir().join("mirrorman");
+            let _ = std::fs::create_dir_all(&state_dir);
+            let _ = std::fs::write(state_dir.join("window-state"), format!("{w},{h}"));
+            glib::Propagation::Proceed
+        });
     }
 
     // ── Load country list at startup ──
@@ -1461,9 +1683,18 @@ fn build_ui(app: &adw::Application) {
     window.present();
 }
 
-fn refresh_list_ui(list: &gtk4::ListBox, mirrors: &[Mirror]) {
+fn refresh_list_ui(list: &gtk4::ListBox, mirrors: &[Mirror], filter: &str) {
     while let Some(c) = list.first_child() { list.remove(&c); }
+    let filter_lower = filter.to_lowercase();
     for m in mirrors {
+        if !filter_lower.is_empty() {
+            let url_match = m.url.to_lowercase().contains(&filter_lower);
+            let country_match = m.country.to_lowercase().contains(&filter_lower);
+            let protocol_match = m.protocol.to_lowercase().contains(&filter_lower);
+            if !url_match && !country_match && !protocol_match {
+                continue;
+            }
+        }
         let row = adw::ActionRow::new();
         row.set_title(&m.url);
         let ip_display = {
@@ -1612,6 +1843,7 @@ fn show_templates_dialog(
     parent: &adw::ApplicationWindow,
     mm: Arc<Mutex<MirrorManager>>,
     mirror_list_holder: Arc<Mutex<Option<gtk4::ListBox>>>,
+    search_filter: std::rc::Rc<std::cell::RefCell<String>>,
 ) {
     let win = adw::Window::new();
     win.set_transient_for(Some(parent));
@@ -1680,8 +1912,9 @@ fn show_templates_dialog(
                     let tpl_mirrors = tpl.mirrors.clone();
                     let list_holder = list_holder.clone();
                     let win = win.clone();
+                    let sf = search_filter.clone();
                     load_btn.connect_clicked(move |_| {
-                        let mut mgr = mm.lock().unwrap();
+                        let mut mgr = mm.lock().unwrap_or_else(|e| e.into_inner());
                         let mut new_mirrors = Vec::new();
                         for tm in &tpl_mirrors {
                             new_mirrors.push(mirrorman_core::mirror_manager::Mirror {
@@ -1701,8 +1934,8 @@ fn show_templates_dialog(
                             });
                         }
                         mgr.mirrors = new_mirrors;
-                        if let Some(list) = list_holder.lock().unwrap().as_ref() {
-                            refresh_list_ui(list, &mgr.mirrors);
+                        if let Some(list) = list_holder.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+                            refresh_list_ui(list, &mgr.mirrors, &sf.borrow());
                         }
                         win.destroy();
                     });
@@ -1749,7 +1982,7 @@ fn show_templates_dialog(
             dialog.connect_response(None, move |_, response| {
                 if response == "save" {
                     let name = entry.text();
-                    let mgr = mm.lock().unwrap();
+                    let mgr = mm.lock().unwrap_or_else(|e| e.into_inner());
                     let _ = templates::MirrorTemplate::save(name.as_str(), &mgr.mirrors);
                     win_to_destroy.destroy();
                 }

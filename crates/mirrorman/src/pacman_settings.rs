@@ -125,7 +125,7 @@ pub fn show_settings_sheet(bottom_sheet: &adw::BottomSheet) {
     group.set_title(tr!("Package Management"));
     box_.append(&group);
 
-    let cfg = config.lock().unwrap();
+    let cfg = config.lock().unwrap_or_else(|e| e.into_inner());
 
     let ignore_row = adw::ActionRow::new();
     ignore_row.set_title(tr!("IgnorePkg"));
@@ -250,7 +250,7 @@ pub fn show_settings_sheet(bottom_sheet: &adw::BottomSheet) {
                 .status();
         }
 
-        let mut cfg = cfg_clone.lock().unwrap();
+        let mut cfg = cfg_clone.lock().unwrap_or_else(|e| e.into_inner());
         cfg.ignore_pkg = ignore_entry.text().split_whitespace().map(|s| s.to_string()).collect();
         cfg.hold_pkg = hold_entry.text().split_whitespace().map(|s| s.to_string()).collect();
         cfg.no_upgrade = noupgrade_entry.text().split_whitespace().map(|s| s.to_string()).collect();
@@ -275,9 +275,13 @@ pub fn show_settings_sheet(bottom_sheet: &adw::BottomSheet) {
 }
 
 fn save_pacman_config(cfg: &PacmanConfig) -> Result<(), String> {
-
     let content = std::fs::read_to_string(PACMAN_CONF)
         .map_err(|e| format!("Failed to read pacman.conf: {e}"))?;
+
+    let backup_path = format!("{PACMAN_CONF}.bak");
+    if let Err(e) = std::fs::copy(PACMAN_CONF, &backup_path) {
+        eprintln!("Warning: failed to backup pacman.conf: {e}");
+    }
 
     let mut new_lines: Vec<String> = Vec::new();
     let mut in_options = false;
@@ -360,4 +364,146 @@ fn line_key(line: &str) -> String {
     let s = line.trim();
     if s.starts_with('#') { return String::new(); }
     s.split('=').next().unwrap_or("").trim().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse_config(content: &str) -> PacmanConfig {
+        let mut cfg = PacmanConfig::default();
+        let mut in_options = false;
+
+        for line in content.lines() {
+            let stripped = line.trim();
+            if stripped.eq_ignore_ascii_case("[options]") {
+                in_options = true;
+                continue;
+            }
+            if in_options && stripped.starts_with('[') && !stripped.eq_ignore_ascii_case("[options]") {
+                in_options = false;
+                continue;
+            }
+            if !in_options { continue; }
+            if stripped.starts_with('#') || stripped.is_empty() { continue; }
+
+            if let Some((key, val)) = stripped.split_once('=') {
+                let key = key.trim();
+                let val = val.trim();
+                match key {
+                    "IgnorePkg" => cfg.ignore_pkg = val.split_whitespace().map(|s| s.to_string()).collect(),
+                    "HoldPkg" => cfg.hold_pkg = val.split_whitespace().map(|s| s.to_string()).collect(),
+                    "NoUpgrade" => cfg.no_upgrade = val.split_whitespace().map(|s| s.to_string()).collect(),
+                    "NoExtract" => cfg.no_extract = val.split_whitespace().map(|s| s.to_string()).collect(),
+                    "SyncFirst" => cfg.sync_first = val.split_whitespace().map(|s| s.to_string()).collect(),
+                    "ParallelDownloads" => { if let Ok(n) = val.parse() { cfg.parallel_downloads = n; } }
+                    "CleanMethod" => cfg.clean_method = val.to_string(),
+                    "Architecture" => cfg.architecture = val.to_string(),
+                    _ => {}
+                }
+            } else {
+                let key = stripped.trim();
+                match key {
+                    "CheckSpace" => cfg.check_space = true,
+                    "ILoveCandy" => cfg.ilovecandy = true,
+                    _ => {}
+                }
+            }
+        }
+        cfg
+    }
+
+    #[test]
+    fn parse_default_config() {
+        let content = "[options]\n#ParallelDownloads = 5\n";
+        let cfg = parse_config(content);
+        assert_eq!(cfg.parallel_downloads, 5); // default
+        assert!(!cfg.ilovecandy);
+    }
+
+    #[test]
+    fn parse_ignore_pkg() {
+        let content = "[options]\nIgnorePkg = linux linux-headers\n";
+        let cfg = parse_config(content);
+        assert_eq!(cfg.ignore_pkg, vec!["linux", "linux-headers"]);
+    }
+
+    #[test]
+    fn parse_hold_pkg() {
+        let content = "[options]\nHoldPkg = glibc pacman\n";
+        let cfg = parse_config(content);
+        assert_eq!(cfg.hold_pkg, vec!["glibc", "pacman"]);
+    }
+
+    #[test]
+    fn parse_parallel_downloads() {
+        let content = "[options]\nParallelDownloads = 10\n";
+        let cfg = parse_config(content);
+        assert_eq!(cfg.parallel_downloads, 10);
+    }
+
+    #[test]
+    fn parse_boolean_flags() {
+        let content = "[options]\nCheckSpace\nILoveCandy\n";
+        let cfg = parse_config(content);
+        assert!(cfg.check_space);
+        assert!(cfg.ilovecandy);
+    }
+
+    #[test]
+    fn parse_architecture() {
+        let content = "[options]\nArchitecture = x86_64_v3\n";
+        let cfg = parse_config(content);
+        assert_eq!(cfg.architecture, "x86_64_v3");
+    }
+
+    #[test]
+    fn parse_clean_method() {
+        let content = "[options]\nCleanMethod = KeepCurrent\n";
+        let cfg = parse_config(content);
+        assert_eq!(cfg.clean_method, "KeepCurrent");
+    }
+
+    #[test]
+    fn parse_commented_lines_ignored() {
+        let content = "[options]\n#IgnorePkg = firefox\n#CheckSpace\n#ILoveCandy\n";
+        let cfg = parse_config(content);
+        assert!(cfg.ignore_pkg.is_empty());
+        assert!(!cfg.check_space);
+        assert!(!cfg.ilovecandy);
+    }
+
+    #[test]
+    fn parse_stops_at_next_section() {
+        let content = "[options]\nIgnorePkg = firefox\nParallelDownloads = 10\n\n[core]\nInclude = /etc/pacman.d/mirrorlist\nIgnorePkg = should-not-parse\n";
+        let cfg = parse_config(content);
+        assert_eq!(cfg.ignore_pkg, vec!["firefox"]);
+        assert_eq!(cfg.parallel_downloads, 10);
+    }
+
+    #[test]
+    fn parse_no_upgrade_no_extract() {
+        let content = "[options]\nNoUpgrade = etc/pacman.d/mirrorlist\nNoExtract = usr/share/doc/*\n";
+        let cfg = parse_config(content);
+        assert_eq!(cfg.no_upgrade, vec!["etc/pacman.d/mirrorlist"]);
+        assert_eq!(cfg.no_extract, vec!["usr/share/doc/*"]);
+    }
+
+    #[test]
+    fn parse_sync_first() {
+        let content = "[options]\nSyncFirst = pacman\n";
+        let cfg = parse_config(content);
+        assert_eq!(cfg.sync_first, vec!["pacman"]);
+    }
+
+    #[test]
+    fn line_key_returns_empty_for_comments() {
+        assert_eq!(line_key("#IgnorePkg = foo"), "");
+    }
+
+    #[test]
+    fn line_key_extracts_key() {
+        assert_eq!(line_key("IgnorePkg = foo"), "IgnorePkg");
+        assert_eq!(line_key("CheckSpace"), "CheckSpace");
+    }
 }

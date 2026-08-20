@@ -1,5 +1,5 @@
 use mirrorman_core::mirror_manager::{Mirror, MirrorManager};
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, CommandFactory};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -72,6 +72,42 @@ pub enum Command {
     },
     /// Show a summary of the current system mirrorlist
     Status,
+    /// Create a timestamped backup of the current mirrorlist
+    Backup,
+    /// Clean pacman package cache (removes uninstalled + keeps N most recent)
+    Clean {
+        /// Number of most recent versions to keep per package
+        #[arg(long, short = 'n', default_value_t = 2)]
+        keep: u32,
+        /// Dry run — show what would be removed without doing it
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Save mirrorlist and sync pacman repositories (equivalent to GUI Sync)
+    Sync {
+        /// Save even when no mirror is enabled
+        #[arg(long)]
+        force: bool,
+    },
+    /// Show the diff between current and proposed mirrorlist
+    Diff,
+    /// Test a single mirror URL for speed
+    TestMirror {
+        /// The mirror URL to test
+        url: String,
+    },
+    /// Generate shell completion scripts
+    Completions {
+        /// The shell to generate completions for
+        #[arg(value_enum)]
+        shell: clap_complete::Shell,
+    },
+    /// Export current mirrorlist to a file path
+    Export {
+        /// Output file path (default: stdout)
+        #[arg(long, short = 'o')]
+        output: Option<PathBuf>,
+    },
 }
 
 #[derive(Serialize, Deserialize)]
@@ -306,6 +342,120 @@ pub fn execute(cli: Cli) -> Result<(), String> {
             println!("Mirrorlist status (/etc/pacman.d/mirrorlist):");
             println!("  File present:        {}", !current.is_empty());
             println!("  Server entries:      {servers}");
+            Ok(())
+        }
+        Command::Backup => {
+            let current = MirrorManager::read_current_mirrorlist();
+            if current.is_empty() {
+                return Err("No mirrorlist to backup.".to_string());
+            }
+            let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+            let backup_path = format!("/etc/pacman.d/mirrorlist.backup.{timestamp}");
+            std::fs::write(&backup_path, &current)
+                .map_err(|e| format!("Failed to write backup: {e}"))?;
+            println!("[+] Backup created: {backup_path}");
+            Ok(())
+        }
+        Command::Clean { keep, dry_run } => {
+            let output = std::process::Command::new("paccache")
+                .args(["-r", "-k", &keep.to_string()])
+                .output()
+                .map_err(|e| format!("Failed to run paccache: {e}"))?;
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            if dry_run {
+                let dry_output = std::process::Command::new("paccache")
+                    .args(["-r", "-k", &keep.to_string(), "--dryrun"])
+                    .output()
+                    .map_err(|e| format!("Failed to run paccache: {e}"))?;
+                println!("{}", String::from_utf8_lossy(&dry_output.stdout));
+            } else {
+                println!("{stdout}");
+                if !stderr.is_empty() {
+                    eprintln!("{stderr}");
+                }
+                println!("[+] Cache cleaned (keeping {keep} versions per package).");
+            }
+            Ok(())
+        }
+        Command::Sync { force } => {
+            println!("[+] Saving mirrorlist...");
+            let mgr = load_cached()?;
+            do_save(&mgr, force)?;
+            println!("[+] Syncing repositories...");
+            let output = std::process::Command::new("pacman")
+                .args(["-Sy"])
+                .output()
+                .map_err(|e| format!("Failed to run pacman -Sy: {e}"))?;
+            if output.status.success() {
+                println!("[+] Repositories synced successfully!");
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                return Err(format!("pacman -Sy failed: {stderr}"));
+            }
+            Ok(())
+        }
+        Command::Diff => {
+            let proposed = {
+                let mgr = load_cached()?;
+                mgr.generate_mirrorlist_content()
+            };
+            let current = MirrorManager::read_current_mirrorlist();
+            if current == proposed {
+                println!("[+] No differences — mirrorlist is up to date.");
+                return Ok(());
+            }
+            use std::io::Write;
+            let mut diff_cmd = std::process::Command::new("diff")
+                .args(["--color=auto", "-u", "/etc/pacman.d/mirrorlist", "/dev/stdin"])
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped())
+                .spawn()
+                .map_err(|e| format!("Failed to run diff: {e}"))?;
+            if let Some(ref mut stdin) = diff_cmd.stdin {
+                stdin.write_all(proposed.as_bytes()).map_err(|e| e.to_string())?;
+            }
+            let output = diff_cmd.wait_with_output().map_err(|e| e.to_string())?;
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if stdout.is_empty() {
+                println!("[+] No differences — mirrorlist is up to date.");
+            } else {
+                print!("{stdout}");
+            }
+            Ok(())
+        }
+        Command::TestMirror { url } => {
+            println!("[+] Testing {url}...");
+            let start = std::time::Instant::now();
+            let output = std::process::Command::new("curl")
+                .args(["-o", "/dev/null", "-s", "-w", "%{time_total}", &url])
+                .output()
+                .map_err(|e| format!("Failed to test mirror: {e}"))?;
+            let elapsed = start.elapsed();
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            println!("[+] Response time: {elapsed:?} (curl: {stdout})");
+            Ok(())
+        }
+        Command::Completions { shell } => {
+            let mut cli = Cli::command();
+            let bin_name = cli.get_name().to_string();
+            clap_complete::generate(shell, &mut cli, bin_name, &mut std::io::stdout());
+            Ok(())
+        }
+        Command::Export { output } => {
+            let content = MirrorManager::read_current_mirrorlist();
+            if content.is_empty() {
+                return Err("No mirrorlist content to export.".to_string());
+            }
+            match output {
+                Some(path) => {
+                    std::fs::write(&path, &content)
+                        .map_err(|e| format!("Failed to write to {}: {e}", path.display()))?;
+                    println!("[+] Exported to {}", path.display());
+                }
+                None => print!("{content}"),
+            }
             Ok(())
         }
     }

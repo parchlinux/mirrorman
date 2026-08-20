@@ -89,16 +89,16 @@ impl HelperClient {
 
     fn fallback_save_mirrorlist(content: &str) -> Result<(), String> {
         use std::io::Write;
-        let temp_path = "/tmp/mirrorman_mirrorlist";
-        let mut f = std::fs::File::create(temp_path)
+        let mut tmp = tempfile::NamedTempFile::new()
             .map_err(|e| format!("Failed to create temp file: {e}"))?;
-        f.write_all(content.as_bytes())
+        tmp.write_all(content.as_bytes())
             .map_err(|e| format!("Failed to write mirrorlist: {e}"))?;
+        let temp_path = tmp.path().to_str()
+            .ok_or("Temp path contains invalid UTF-8")?;
         let status = std::process::Command::new("pkexec")
             .args(["cp", temp_path, "/etc/pacman.d/mirrorlist"])
             .status()
             .map_err(|e| format!("pkexec failed: {e}"))?;
-        let _ = std::fs::remove_file(temp_path);
         if status.success() {
             Ok(())
         } else {
@@ -108,16 +108,16 @@ impl HelperClient {
 
     fn fallback_save_pacman_conf(content: &str) -> Result<(), String> {
         use std::io::Write;
-        let temp_path = "/tmp/mirrorman_pacman_conf";
-        let mut f = std::fs::File::create(temp_path)
+        let mut tmp = tempfile::NamedTempFile::new()
             .map_err(|e| format!("Failed to create temp file: {e}"))?;
-        f.write_all(content.as_bytes())
+        tmp.write_all(content.as_bytes())
             .map_err(|e| format!("Failed to write config: {e}"))?;
+        let temp_path = tmp.path().to_str()
+            .ok_or("Temp path contains invalid UTF-8")?;
         let status = std::process::Command::new("pkexec")
             .args(["cp", temp_path, "/etc/pacman.conf"])
             .status()
             .map_err(|e| format!("pkexec failed: {e}"))?;
-        let _ = std::fs::remove_file(temp_path);
         if status.success() {
             Ok(())
         } else {

@@ -17,10 +17,36 @@ impl SyncManager {
             &["/etc/pacman.d/mirrorlist", &backup_path],
         )?;
         if success {
+            Self::rotate_backups(10)?;
             Ok(backup_path)
         } else {
             Err(format!("Failed to backup mirrorlist: {stderr}"))
         }
+    }
+
+    fn rotate_backups(max_backups: usize) -> Result<(), String> {
+        let backup_dir = std::path::Path::new(crate::mirror_manager::MIRRORLIST_BACKUP);
+        let parent = backup_dir.parent().unwrap_or(std::path::Path::new("/etc/pacman.d"));
+        let prefix = backup_dir.file_name().unwrap_or_default().to_string_lossy();
+        let mut backups: Vec<std::path::PathBuf> = std::fs::read_dir(parent)
+            .map_err(|e| format!("Failed to read backup dir: {e}"))?
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| {
+                p.file_name()
+                    .map_or(false, |f| f.to_string_lossy().starts_with(prefix.as_ref()) && f != prefix.as_ref() && p != backup_dir)
+            })
+            .collect();
+        backups.sort();
+        while backups.len() >= max_backups {
+            if let Some(oldest) = backups.first() {
+                let _ = std::fs::remove_file(oldest);
+                backups.remove(0);
+            } else {
+                break;
+            }
+        }
+        Ok(())
     }
 
     pub fn generate_share_content(mirrors: &[crate::mirror_manager::Mirror]) -> String {
