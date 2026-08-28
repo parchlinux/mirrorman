@@ -1,12 +1,12 @@
 # Maintainer: Parch GNU/Linux Team
 
 pkgname=mirrorman
-pkgver=0.5.2
+pkgver=0.5.3
 pkgrel=1
 pkgdesc="Pacman mirror and repository manager for Parch Linux"
 arch=('x86_64')
 url="https://github.com/parchlinux/mirrorman"
-license=('GPL3')
+license=('GPL-3.0-or-later')
 depends=(
   'gtk4'
   'libadwaita'
@@ -15,9 +15,14 @@ depends=(
   'pacman'
   'gettext'
 )
+optdepends=(
+  'pacman-contrib: cache cleaning via paccache'
+  'diffutils: mirrorlist diff preview'
+)
 makedepends=('cargo' 'git' 'gettext')
+install=mirrorman.install
 source=(
-  "git+https://github.com/parchlinux/mirrorman.git#tag=v0.5.2"
+  "git+https://github.com/parchlinux/mirrorman.git#tag=v0.5.3"
 )
 sha256sums=('SKIP')
 

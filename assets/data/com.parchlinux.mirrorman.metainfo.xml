@@ -44,6 +44,17 @@
     <keyword>ranking</keyword>
   </keywords>
   <releases>
+    <release version="0.5.3" date="2026-08-28">
+      <description>
+        <p>Performance and offline resilience release:</p>
+        <ul>
+          <li>HTTP ETag caching for mirror status with offline fallback</li>
+          <li>Instant startup without blocking on network requests</li>
+          <li>Worker-pool mirror speed testing and availability checks</li>
+          <li>CLI sync and backup privilege fixes</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.5.2" date="2026-08-21">
       <description>
         <p>Stabilization and feature release:</p>

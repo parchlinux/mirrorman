@@ -1380,7 +1380,7 @@ dependencies = [
 
 [[package]]
 name = "mirrorman"
-version = "0.5.2"
+version = "0.5.3"
 dependencies = [
  "glib",
  "gtk4",
@@ -1390,7 +1390,7 @@ dependencies = [
 
 [[package]]
 name = "mirrorman-cli"
-version = "0.5.2"
+version = "0.5.3"
 dependencies = [
  "chrono",
  "clap",
@@ -1402,7 +1402,7 @@ dependencies = [
 
 [[package]]
 name = "mirrorman-core"
-version = "0.5.2"
+version = "0.5.3"
 dependencies = [
  "chrono",
  "gettext-rs",
@@ -1418,7 +1418,7 @@ dependencies = [
 
 [[package]]
 name = "mirrorman-helper"
-version = "0.5.2"
+version = "0.5.3"
 dependencies = [
  "mirrorman-core",
  "tokio",

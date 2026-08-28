@@ -5,6 +5,26 @@ All notable changes to MirrorMan will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] - 2026-08-28
+
+### Added
+- **Core HTTP Caching & Offline Fallback** — Arch Linux mirror status JSON is now cached locally in `$XDG_CACHE_HOME/mirrorman/arch_status.json` with `ETag` and `If-Modified-Since` conditional HTTP request headers (`304 Not Modified` support).
+- **Offline Startup Resilience** — GUI and CLI gracefully fall back to cached status if offline or experiencing connection drops.
+- **Fast Startup** — GUI populates country lists instantly without waiting for network responses.
+
+### Performance
+- **Worker-Pool Mirror Testing** — Replaced chunk-based batching in `test_all_speeds_concurrent` and `check_mirror_availability` with a concurrent work-stealing queue, preventing slow mirrors from stalling workers.
+- **Connection Reuse** — Reused a shared `reqwest` client across speed tests instead of reallocating TLS contexts per thread.
+
+### Fixed
+- **CLI Sync & Backup Privileges** — Routed `mirrorman-cli sync` and `mirrorman-cli backup` through `SyncManager` and `HelperClient` so unprivileged users can execute them without permission errors.
+- **CLI Output Formatting** — Fixed column header alignment in `mirrorman-cli` mirror tables.
+- **Paccache Error Handling** — Provided helpful guidance when `pacman-contrib` is missing.
+
+### Changed
+- Bumped version to 0.5.3 across all crates, PKGBUILD, man page, and user agents.
+- Modernized PKGBUILD with SPDX license identifier (`GPL-3.0-or-later`) and `optdepends`.
+
 ## [0.5.2] - 2026-08-21
 
 ### Security

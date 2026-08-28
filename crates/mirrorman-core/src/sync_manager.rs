@@ -34,7 +34,7 @@ impl SyncManager {
             .map(|e| e.path())
             .filter(|p| {
                 p.file_name()
-                    .map_or(false, |f| f.to_string_lossy().starts_with(prefix.as_ref()) && f != prefix.as_ref() && p != backup_dir)
+                    .is_some_and(|f| f.to_string_lossy().starts_with(prefix.as_ref()) && f != prefix.as_ref() && p != backup_dir)
             })
             .collect();
         backups.sort();

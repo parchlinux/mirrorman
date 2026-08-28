@@ -15,10 +15,8 @@ pub fn get_suitable_terminal() -> Option<String> {
         if command_exists("konsole") {
             return Some("konsole -e ".to_string());
         }
-    } else if desktop.contains("XFCE") {
-        if command_exists("xfce4-terminal") {
-            return Some("xfce4-terminal -e ".to_string());
-        }
+    } else if desktop.contains("XFCE") && command_exists("xfce4-terminal") {
+        return Some("xfce4-terminal -e ".to_string());
     }
 
     for term in &["alacritty", "kitty", "xterm"] {

@@ -20,13 +20,15 @@ pub struct Mirror {
     pub duration_stddev: Option<f64>,
 }
 
+type SpeedTestResults = Arc<Mutex<Vec<(usize, Option<f64>)>>>;
+
 pub fn country_flag(code: &str) -> String {
     if code.len() != 2 { return String::new(); }
     let code = code.to_uppercase();
     let bytes = code.as_bytes();
     let a = bytes[0] as u32;
     let b = bytes[1] as u32;
-    if a < 65 || a > 90 || b < 65 || b > 90 { return String::new(); }
+    if !(65..=90).contains(&a) || !(65..=90).contains(&b) { return String::new(); }
     let ra = char::from_u32(0x1F1E6 + (a - 65)).unwrap_or(' ');
     let rb = char::from_u32(0x1F1E6 + (b - 65)).unwrap_or(' ');
     format!("{}{}", ra, rb)
@@ -72,7 +74,7 @@ struct ApiMirror {
 }
 
 const API_URL: &str = "https://archlinux.org/mirrors/status/json/";
-const USER_AGENT: &str = "mirrorman/0.5.2";
+const USER_AGENT: &str = "mirrorman/0.5.3";
 const MIRRORLIST_FILE: &str = "/etc/pacman.d/mirrorlist";
 pub const MIRRORLIST_BACKUP: &str = "/etc/pacman.d/mirrorlist.backup";
 
@@ -81,6 +83,123 @@ const IRANIAN_MIRRORS: &[&str] = &[
     "http://repo.iut.ac.ir/repo/archlinux/$repo/os/$arch",
     "https://mirror.arvancloud.ir/archlinux/$repo/os/$arch",
 ];
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StatusCache {
+    pub cached_at: DateTime<Utc>,
+    pub etag: Option<String>,
+    pub last_modified: Option<String>,
+    pub raw_json: String,
+}
+
+pub fn status_cache_path() -> std::path::PathBuf {
+    if let Ok(p) = std::env::var("MIRRORMAN_STATUS_CACHE") {
+        return std::path::PathBuf::from(p);
+    }
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/home".to_string());
+    let cache_base = std::env::var("XDG_CACHE_HOME")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::PathBuf::from(format!("{home}/.cache")));
+    let mut dir = cache_base;
+    dir.push("mirrorman");
+    let _ = std::fs::create_dir_all(&dir);
+    dir.push("arch_status.json");
+    dir
+}
+
+pub fn load_status_cache() -> Option<StatusCache> {
+    let path = status_cache_path();
+    let content = std::fs::read_to_string(&path).ok()?;
+    serde_json::from_str(&content).ok()
+}
+
+pub fn save_status_cache(cache: &StatusCache) {
+    let path = status_cache_path();
+    if let Ok(json) = serde_json::to_string(cache) {
+        let _ = std::fs::write(path, json);
+    }
+}
+
+pub fn fetch_raw_api_status(force_network: bool) -> Result<String, String> {
+    let cached = load_status_cache();
+
+    // If cache is fresh (< 2 hours old) and network is not forced, return cached data directly.
+    if !force_network {
+        if let Some(ref c) = cached {
+            let age = Utc::now() - c.cached_at;
+            if age < Duration::hours(2) && !c.raw_json.is_empty() {
+                return Ok(c.raw_json.clone());
+            }
+        }
+    }
+
+    let client = reqwest::blocking::Client::builder()
+        .user_agent(USER_AGENT)
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
+
+    let mut req = client.get(API_URL);
+
+    // Conditional HTTP request headers
+    if let Some(ref c) = cached {
+        if let Some(ref etag) = c.etag {
+            req = req.header("If-None-Match", etag);
+        }
+        if let Some(ref lm) = c.last_modified {
+            req = req.header("If-Modified-Since", lm);
+        }
+    }
+
+    match req.send() {
+        Ok(resp) => {
+            if resp.status() == reqwest::StatusCode::NOT_MODIFIED {
+                if let Some(mut c) = cached {
+                    c.cached_at = Utc::now();
+                    save_status_cache(&c);
+                    return Ok(c.raw_json);
+                }
+            }
+
+            if resp.status().is_success() {
+                let etag = resp
+                    .headers()
+                    .get("ETag")
+                    .and_then(|v| v.to_str().ok())
+                    .map(|s| s.to_string());
+                let last_modified = resp
+                    .headers()
+                    .get("Last-Modified")
+                    .and_then(|v| v.to_str().ok())
+                    .map(|s| s.to_string());
+                let body = resp
+                    .text()
+                    .map_err(|e| format!("Failed to read response body: {e}"))?;
+
+                let new_cache = StatusCache {
+                    cached_at: Utc::now(),
+                    etag,
+                    last_modified,
+                    raw_json: body.clone(),
+                };
+                save_status_cache(&new_cache);
+                Ok(body)
+            } else if let Some(c) = cached {
+                Ok(c.raw_json)
+            } else {
+                Err(format!("HTTP Error: {}", resp.status()))
+            }
+        }
+        Err(e) => {
+            if let Some(c) = cached {
+                if !c.raw_json.is_empty() {
+                    return Ok(c.raw_json);
+                }
+            }
+            Err(format!("Network error: {e}"))
+        }
+    }
+}
 
 /// True when a mirror's country should be kept for the given selection.
 /// An empty selection means "all countries".
@@ -91,6 +210,12 @@ pub fn country_selected(countries: &[String], mirror_country: &str) -> bool {
 pub struct MirrorManager {
     pub mirrors: Vec<Mirror>,
     pub countries: Vec<String>,
+}
+
+impl Default for MirrorManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MirrorManager {
@@ -108,24 +233,7 @@ impl MirrorManager {
         ip_versions: &[String],
         use_status: bool,
     ) -> Result<(), String> {
-        let client = reqwest::blocking::Client::builder()
-            .user_agent(USER_AGENT)
-            .timeout(std::time::Duration::from_secs(10))
-            .build()
-            .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
-
-        let response = client
-            .get(API_URL)
-            .send()
-            .map_err(|e| format!("Network error: {e}"))?;
-
-        if !response.status().is_success() {
-            return Err(format!("HTTP Error: {}", response.status()));
-        }
-
-        let body = response
-            .text()
-            .map_err(|e| format!("Failed to read response body: {e}"))?;
+        let body = fetch_raw_api_status(false)?;
 
         let api: ApiResponse = serde_json::from_str(&body)
             .map_err(|e| format!("Failed to parse API response: {e}"))?;
@@ -211,24 +319,7 @@ impl MirrorManager {
     }
 
     pub fn fetch_countries_only(&self) -> Result<Vec<String>, String> {
-        let client = reqwest::blocking::Client::builder()
-            .user_agent(USER_AGENT)
-            .timeout(std::time::Duration::from_secs(10))
-            .build()
-            .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
-
-        let response = client
-            .get(API_URL)
-            .send()
-            .map_err(|e| format!("Network error: {e}"))?;
-
-        if !response.status().is_success() {
-            return Err(format!("HTTP Error: {}", response.status()));
-        }
-
-        let body = response
-            .text()
-            .map_err(|e| format!("Failed to read response body: {e}"))?;
+        let body = fetch_raw_api_status(false)?;
 
         let api: ApiResponse = serde_json::from_str(&body)
             .map_err(|e| format!("Failed to parse API response: {e}"))?;
@@ -257,53 +348,67 @@ impl MirrorManager {
             return;
         }
 
-        let results: Arc<Mutex<Vec<(usize, Option<f64>)>>> = Arc::new(Mutex::new(Vec::new()));
-        let mut handles = Vec::new();
-        let chunk_size = max_workers;
+        let num_workers = max_workers.max(1).min(mirrors.len());
+        let results: SpeedTestResults = Arc::new(Mutex::new(Vec::new()));
+        let queue: Arc<Mutex<Vec<(usize, String)>>> = Arc::new(Mutex::new(
+            mirrors
+                .iter()
+                .enumerate()
+                .filter(|(_, m)| {
+                    !m.url.is_empty()
+                        && (m.url.starts_with("http://") || m.url.starts_with("https://"))
+                })
+                .map(|(idx, m)| (idx, speed_test_url(&m.url)))
+                .collect(),
+        ));
 
-        for (idx, mirror) in mirrors.iter().enumerate() {
-            if mirror.url.is_empty()
-                || (!mirror.url.starts_with("http://") && !mirror.url.starts_with("https://"))
-            {
-                continue;
-            }
+        let client = match reqwest::blocking::Client::builder()
+            .user_agent(USER_AGENT)
+            .timeout(std::time::Duration::from_secs(5))
+            .build()
+        {
+            Ok(c) => Arc::new(c),
+            Err(_) => return,
+        };
 
-            let url = mirror.url.clone();
+        let mut handles = Vec::with_capacity(num_workers);
+        for _ in 0..num_workers {
+            let queue = Arc::clone(&queue);
             let results = Arc::clone(&results);
-            let test_url = speed_test_url(&url);
+            let client = Arc::clone(&client);
 
-            let handle = std::thread::spawn(move || {
-                let client = reqwest::blocking::Client::builder()
-                    .user_agent(USER_AGENT)
-                    .timeout(std::time::Duration::from_secs(5))
-                    .build()
-                    .ok()?;
+            let handle = std::thread::spawn(move || loop {
+                let item = {
+                    let mut q = queue.lock().unwrap_or_else(|e| e.into_inner());
+                    q.pop()
+                };
+                let (idx, test_url) = match item {
+                    Some(val) => val,
+                    None => break,
+                };
 
                 let start = Instant::now();
                 match client.get(&test_url).send() {
                     Ok(resp) => {
                         let _ = resp.bytes();
                         let elapsed = start.elapsed().as_secs_f64() * 1000.0;
-                        results.lock().unwrap_or_else(|e| e.into_inner()).push((idx, Some(elapsed)));
-                        Some(elapsed)
+                        results
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .push((idx, Some(elapsed)));
                     }
                     Err(_) => {
-                        results.lock().unwrap_or_else(|e| e.into_inner()).push((idx, None));
-                        None
+                        results
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .push((idx, None));
                     }
                 }
             });
-
             handles.push(handle);
-
-            if handles.len() >= chunk_size {
-                for h in handles.drain(..) {
-                    let _ = h.join();
-                }
-            }
         }
 
-        for h in handles.drain(..) {
+        for h in handles {
             let _ = h.join();
         }
 
@@ -316,57 +421,79 @@ impl MirrorManager {
     }
 
     pub fn check_mirror_availability(mirrors: &mut [Mirror], max_workers: usize) {
-        if mirrors.is_empty() { return; }
+        if mirrors.is_empty() {
+            return;
+        }
 
-        let results: Arc<Mutex<Vec<(usize, Option<f64>)>>> = Arc::new(Mutex::new(Vec::new()));
-        let mut handles = Vec::new();
-        let chunk_size = max_workers;
+        let num_workers = max_workers.max(1).min(mirrors.len());
+        let results: SpeedTestResults = Arc::new(Mutex::new(Vec::new()));
+        let queue: Arc<Mutex<Vec<(usize, String)>>> = Arc::new(Mutex::new(
+            mirrors
+                .iter()
+                .enumerate()
+                .filter(|(_, m)| {
+                    !m.url.is_empty()
+                        && (m.url.starts_with("http://") || m.url.starts_with("https://"))
+                })
+                .map(|(idx, m)| (idx, availability_url(&m.url)))
+                .collect(),
+        ));
 
-        for (idx, mirror) in mirrors.iter().enumerate() {
-            if mirror.url.is_empty()
-                || (!mirror.url.starts_with("http://") && !mirror.url.starts_with("https://"))
-            {
-                continue;
-            }
+        let client = match reqwest::blocking::Client::builder()
+            .user_agent(USER_AGENT)
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+        {
+            Ok(c) => Arc::new(c),
+            Err(_) => return,
+        };
 
-            let url = mirror.url.clone();
+        let mut handles = Vec::with_capacity(num_workers);
+        for _ in 0..num_workers {
+            let queue = Arc::clone(&queue);
             let results = Arc::clone(&results);
+            let client = Arc::clone(&client);
 
-            let handle = std::thread::spawn(move || {
-                let client = reqwest::blocking::Client::builder()
-                    .user_agent(USER_AGENT)
-                    .timeout(std::time::Duration::from_secs(10))
-                    .build()
-                    .ok()?;
+            let handle = std::thread::spawn(move || loop {
+                let item = {
+                    let mut q = queue.lock().unwrap_or_else(|e| e.into_inner());
+                    q.pop()
+                };
+                let (idx, check_url) = match item {
+                    Some(val) => val,
+                    None => break,
+                };
 
                 let start = Instant::now();
-                let check_url = availability_url(&url);
                 match client.head(&check_url).send() {
                     Ok(resp) => {
                         let elapsed = start.elapsed().as_secs_f64() * 1000.0;
                         if resp.status().is_success() || resp.status().as_u16() < 400 {
-                            results.lock().unwrap_or_else(|e| e.into_inner()).push((idx, Some(elapsed)));
-                            Some(elapsed)
+                            results
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .push((idx, Some(elapsed)));
                         } else {
-                            results.lock().unwrap_or_else(|e| e.into_inner()).push((idx, None));
-                            None
+                            results
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .push((idx, None));
                         }
                     }
                     Err(_) => {
-                        results.lock().unwrap_or_else(|e| e.into_inner()).push((idx, None));
-                        None
+                        results
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .push((idx, None));
                     }
                 }
             });
-
             handles.push(handle);
-
-            if handles.len() >= chunk_size {
-                for h in handles.drain(..) { let _ = h.join(); }
-            }
         }
 
-        for h in handles.drain(..) { let _ = h.join(); }
+        for h in handles {
+            let _ = h.join();
+        }
 
         let final_results = results.lock().unwrap_or_else(|e| e.into_inner());
         for &(idx, speed) in final_results.iter() {
@@ -701,5 +828,25 @@ mod tests {
         assert!(country_selected(&selected, "France"));
         assert!(!country_selected(&selected, "Italy"));
         assert!(!country_selected(&selected, ""));
+    }
+
+    #[test]
+    fn test_status_cache_roundtrip() {
+        let tmp = std::env::temp_dir().join(format!("mirrorman-status-test-{}", std::process::id()));
+        std::env::set_var("MIRRORMAN_STATUS_CACHE", &tmp);
+
+        let cache = StatusCache {
+            cached_at: Utc::now(),
+            etag: Some("test-etag-123".to_string()),
+            last_modified: Some("Wed, 21 Oct 2026 07:28:00 GMT".to_string()),
+            raw_json: r#"{"urls":[]}"#.to_string(),
+        };
+
+        save_status_cache(&cache);
+        let loaded = load_status_cache().expect("cache should load");
+        assert_eq!(loaded.etag, Some("test-etag-123".to_string()));
+        assert_eq!(loaded.raw_json, r#"{"urls":[]}"#);
+
+        let _ = std::fs::remove_file(&tmp);
     }
 }

@@ -214,7 +214,7 @@ pub fn do_save(mgr: &MirrorManager, force: bool) -> Result<(), String> {
 }
 
 fn print_mirror_table(mirrors: &[Mirror]) {
-    println!("{:<3} {:<6} {:>8}  {:<55} {}", "#", "Proto", "Speed", "URL", "Country");
+    println!("{:<3} {:<6} {:>8}  {:<55} Country", "#", "Proto", "Speed", "URL");
     for (i, m) in mirrors.iter().enumerate() {
         let speed = m
             .speed
@@ -345,54 +345,51 @@ pub fn execute(cli: Cli) -> Result<(), String> {
             Ok(())
         }
         Command::Backup => {
-            let current = MirrorManager::read_current_mirrorlist();
-            if current.is_empty() {
-                return Err("No mirrorlist to backup.".to_string());
-            }
-            let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-            let backup_path = format!("/etc/pacman.d/mirrorlist.backup.{timestamp}");
-            std::fs::write(&backup_path, &current)
-                .map_err(|e| format!("Failed to write backup: {e}"))?;
+            let backup_path = mirrorman_core::sync_manager::SyncManager::backup_mirrorlist()?;
             println!("[+] Backup created: {backup_path}");
             Ok(())
         }
         Command::Clean { keep, dry_run } => {
-            let output = std::process::Command::new("paccache")
-                .args(["-r", "-k", &keep.to_string()])
-                .output()
-                .map_err(|e| format!("Failed to run paccache: {e}"))?;
+            let mut cmd = std::process::Command::new("paccache");
+            cmd.args(["-r", "-k", &keep.to_string()]);
+            if dry_run {
+                cmd.arg("--dryrun");
+            }
+            let output = match cmd.output() {
+                Ok(o) => o,
+                Err(e) => {
+                    return Err(format!(
+                        "Failed to run paccache ({e}). Please ensure 'pacman-contrib' is installed."
+                    ));
+                }
+            };
             let stdout = String::from_utf8_lossy(&output.stdout);
             let stderr = String::from_utf8_lossy(&output.stderr);
-            if dry_run {
-                let dry_output = std::process::Command::new("paccache")
-                    .args(["-r", "-k", &keep.to_string(), "--dryrun"])
-                    .output()
-                    .map_err(|e| format!("Failed to run paccache: {e}"))?;
-                println!("{}", String::from_utf8_lossy(&dry_output.stdout));
-            } else {
-                println!("{stdout}");
-                if !stderr.is_empty() {
-                    eprintln!("{stderr}");
-                }
-                println!("[+] Cache cleaned (keeping {keep} versions per package).");
+            if !stdout.is_empty() {
+                print!("{stdout}");
             }
-            Ok(())
+            if !stderr.is_empty() {
+                eprint!("{stderr}");
+            }
+            if output.status.success() {
+                if !dry_run {
+                    println!("[+] Cache cleaned (keeping {keep} versions per package).");
+                }
+                Ok(())
+            } else {
+                Err(format!("paccache exited with status {}", output.status))
+            }
         }
         Command::Sync { force } => {
             println!("[+] Saving mirrorlist...");
             let mgr = load_cached()?;
             do_save(&mgr, force)?;
             println!("[+] Syncing repositories...");
-            let output = std::process::Command::new("pacman")
-                .args(["-Sy"])
-                .output()
-                .map_err(|e| format!("Failed to run pacman -Sy: {e}"))?;
-            if output.status.success() {
-                println!("[+] Repositories synced successfully!");
-            } else {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                return Err(format!("pacman -Sy failed: {stderr}"));
+            let out = mirrorman_core::sync_manager::SyncManager::sync_repositories()?;
+            if !out.is_empty() {
+                println!("{out}");
             }
+            println!("[+] Repositories synced successfully!");
             Ok(())
         }
         Command::Diff => {

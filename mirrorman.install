@@ -1,0 +1,14 @@
+post_install() {
+  systemctl daemon-reload
+  systemctl enable --now mirrorman-helper.service 2>/dev/null || true
+}
+
+post_upgrade() {
+  systemctl daemon-reload
+  systemctl try-restart mirrorman-helper.service 2>/dev/null || true
+  systemctl enable mirrorman-helper.service 2>/dev/null || true
+}
+
+pre_remove() {
+  systemctl disable --now mirrorman-helper.service 2>/dev/null || true
+}

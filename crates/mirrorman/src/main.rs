@@ -568,11 +568,11 @@ fn build_ui(app: &adw::Application) {
     mirror_toolbar.append(&gtk4::Label::new(Some(tr!("Sort by:"))));
 
     let sort_dropdown = gtk4::DropDown::from_strings(&[
-        &tr!("Speed"),
-        &tr!("Health"),
-        &tr!("Country"),
-        &tr!("Age"),
-        &tr!("Reliability"),
+        tr!("Speed"),
+        tr!("Health"),
+        tr!("Country"),
+        tr!("Age"),
+        tr!("Reliability"),
     ]);
     sort_dropdown.set_valign(gtk4::Align::Center);
     sort_dropdown.set_sensitive(false);
@@ -744,12 +744,12 @@ fn build_ui(app: &adw::Application) {
                     "fetch_ok" => {
                         let mgr = mm_arc.lock().unwrap_or_else(|e| e.into_inner());
                         if let Some(list) = list_holder.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
-                            if mgr.mirrors.len() > 0 {
+                            if !mgr.mirrors.is_empty() {
                                 mirror_scroll_h.set_child(Some(list));
                             }
                             refresh_list_ui(list, &mgr.mirrors, &search_filter_h.borrow());
                         }
-                        let has_mirrors = mgr.mirrors.len() > 0;
+                        let has_mirrors = !mgr.mirrors.is_empty();
                         l_sort_dropdown.set_sensitive(has_mirrors);
                         l_search_entry.set_sensitive(has_mirrors);
                         set_loading(&l_spinner, &l_label, &l_refresh, &l_hrefresh, &l_rank, &l_sync, &l_clean, &l_avail, &l_http, &l_https, &l_ipv4, &l_ipv6, &l_status, &l_country_row, false, "");
@@ -843,16 +843,16 @@ fn build_ui(app: &adw::Application) {
 
         refresh_btn.clone().connect_clicked(move |_| {
             let protocols: Vec<String> = [
-                http_check.is_active().then(|| "http"),
-                https_check.is_active().then(|| "https"),
+                http_check.is_active().then_some("http"),
+                https_check.is_active().then_some("https"),
             ].into_iter().flatten().map(String::from).collect();
             if protocols.is_empty() {
                 alert(&win, tr!("No Protocols"), tr!("Select at least one protocol"));
                 return;
             }
             let ip_versions: Vec<String> = [
-                ipv4_check.is_active().then(|| "4"),
-                ipv6_check.is_active().then(|| "6"),
+                ipv4_check.is_active().then_some("4"),
+                ipv6_check.is_active().then_some("6"),
             ].into_iter().flatten().map(String::from).collect();
             if ip_versions.is_empty() {
                 alert(&win, tr!("No IP Versions"), tr!("Select at least one IP version"));
@@ -1670,12 +1670,9 @@ fn build_ui(app: &adw::Application) {
         let tx = tx.clone();
         std::thread::spawn(move || {
             let mgr = MirrorManager::new();
-            match mgr.fetch_countries_only() {
-                Ok(countries) => {
-                    let msg = format!("cntry:{}", countries.join(","));
-                    let _ = tx.send(msg);
-                }
-                Err(_) => {}
+            if let Ok(countries) = mgr.fetch_countries_only() {
+                let msg = format!("cntry:{}", countries.join(","));
+                let _ = tx.send(msg);
             }
         });
     }

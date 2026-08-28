@@ -10,6 +10,12 @@ pub struct RepoConfig {
     pub repositories: HashMap<String, bool>,
 }
 
+impl Default for RepoConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RepoConfig {
     pub fn new() -> Self {
         let standard_repos = vec![
@@ -96,11 +102,7 @@ impl RepoConfig {
             return Err(format!("Repository already exists: '{repo_name}'"));
         }
 
-        let config_text = if let Ok(c) = std::fs::read_to_string(self.pacman_conf) {
-            c
-        } else {
-            String::new()
-        };
+        let config_text = std::fs::read_to_string(self.pacman_conf).unwrap_or_default();
 
         let sig_line = if siglevel.is_empty() {
             String::new()
@@ -233,7 +235,7 @@ fn remove_repo_text(config_text: &str, repo_name: &str) -> String {
             let header_uncommented = stripped.trim_start_matches('#').trim();
             if header_uncommented.starts_with('[') && header_uncommented != section_header {
                 in_section = false;
-                if skip_next_blank && new_lines.last().map_or(false, |l: &String| l.is_empty()) {
+                if skip_next_blank && new_lines.last().is_some_and(|l: &String| l.is_empty()) {
                     new_lines.pop();
                 }
                 new_lines.push(line.to_string());
@@ -245,7 +247,7 @@ fn remove_repo_text(config_text: &str, repo_name: &str) -> String {
         new_lines.push(line.to_string());
     }
 
-    if skip_next_blank && new_lines.last().map_or(false, |l: &String| l.is_empty()) {
+    if skip_next_blank && new_lines.last().is_some_and(|l: &String| l.is_empty()) {
         new_lines.pop();
     }
     new_lines.push(String::new());

@@ -53,7 +53,7 @@ impl MirrorTemplate {
             return Err("Template name cannot be empty".to_string());
         }
         let mut dir = Self::get_templates_dir();
-        let safe_filename = format!("{}.json", name.trim().replace('/', "_").replace(' ', "_"));
+        let safe_filename = format!("{}.json", name.trim().replace(['/', ' '], "_"));
         dir.push(safe_filename);
 
         let template_mirrors = mirrors
@@ -78,7 +78,7 @@ impl MirrorTemplate {
 
     pub fn delete(name: &str) -> Result<(), String> {
         let mut dir = Self::get_templates_dir();
-        let safe_filename = format!("{}.json", name.trim().replace('/', "_").replace(' ', "_"));
+        let safe_filename = format!("{}.json", name.trim().replace(['/', ' '], "_"));
         dir.push(safe_filename);
         if dir.exists() {
             fs::remove_file(dir).map_err(|e| format!("Failed to delete template: {e}"))?;
