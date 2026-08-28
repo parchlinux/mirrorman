@@ -1518,24 +1518,20 @@ fn build_ui(app: &adw::Application) {
             let a = adw::AboutDialog::new();
             a.set_application_name(tr!("Parch Repository Manager"));
             a.set_application_icon("com.parchlinux.mirrorman");
-            a.set_version("0.5.2");
+            a.set_version(env!("CARGO_PKG_VERSION"));
             a.set_developer_name(tr!("Parch GNU/Linux Team"));
             a.set_website("https://parchlinux.com");
             a.set_copyright(tr!("Copyright 2026 Parch GNU/Linux Team"));
             a.set_license_type(gtk4::License::Gpl30);
             a.set_release_notes(tr!(
-"<p>Version 0.5.2 (2026)</p>
+"<p>Version 0.5.3 (2026)</p>
 <ul>
-<li>SHA256 verification for BlackArch strap.sh (replaces SHA1)</li>
-<li>GUI: mirror search/filter, Enable All / Disable All, sort by Reliability</li>
-<li>GUI: configurable auto-refresh timer (5 min – 6 h)</li>
-<li>GUI: toast notifications, keyboard shortcuts (Ctrl+R / Ctrl+S / Ctrl+F)</li>
-<li>GUI: window geometry persistence across sessions</li>
-<li>CLI: backup, clean, sync, diff, test-mirror, export, shell completions</li>
-<li>Arch-aware speed test URL (aarch64, armv7h, i686, x86_64)</li>
-<li>Backup rotation (keeps 10 most recent, prunes oldest)</li>
-<li>Remove repository support with pacman.conf rollback</li>
-<li>Hardened mirrorman-helper, multi-country filters, mirror health dashboard from 0.5.x</li>
+<li>Core HTTP caching: Arch Linux status JSON cached locally with ETag support (304 Not Modified)</li>
+<li>Offline fallback and instant startup without network blocking</li>
+<li>High-throughput worker-pool concurrency for speed tests and availability checks</li>
+<li>CLI privilege fixes for sync and backup via D-Bus helper</li>
+<li>Automated systemd service enabling on install and upgrade</li>
+<li>SPDX license identifier and package optimizations</li>
 </ul>"
             ));
             a.present(Some(&win));
