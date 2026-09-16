@@ -1524,14 +1524,12 @@ fn build_ui(app: &adw::Application) {
             a.set_copyright(tr!("Copyright 2026 Parch GNU/Linux Team"));
             a.set_license_type(gtk4::License::Gpl30);
             a.set_release_notes(tr!(
-"<p>Version 0.5.3 (2026)</p>
+"<p>Version 0.6.0 (2026)</p>
 <ul>
-<li>Core HTTP caching: Arch Linux status JSON cached locally with ETag support (304 Not Modified)</li>
-<li>Offline fallback and instant startup without network blocking</li>
-<li>High-throughput worker-pool concurrency for speed tests and availability checks</li>
-<li>CLI privilege fixes for sync and backup via D-Bus helper</li>
-<li>Automated systemd service enabling on install and upgrade</li>
-<li>SPDX license identifier and package optimizations</li>
+<li>Added mirrorman-dev standalone GNOME HIG GUI for programmer package managers</li>
+<li>Added support for pip, npm, cargo, go, gem, and composer mirrors</li>
+<li>Integrated curated mirrors from Mirava Org and official registries</li>
+<li>Added mirrorman-cli dev subcommands for headless automation</li>
 </ul>"
             ));
             a.present(Some(&win));

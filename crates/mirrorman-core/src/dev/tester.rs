@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use super::models::DevMirror;
 
-const USER_AGENT: &str = "mirrorman/0.5.3";
+const USER_AGENT: &str = "mirrorman/0.6.0";
 
 /// Tests a single endpoint with a GET request, returning response latency in milliseconds.
 pub fn test_single_endpoint(client: &reqwest::blocking::Client, ping_url: &str) -> Option<f64> {

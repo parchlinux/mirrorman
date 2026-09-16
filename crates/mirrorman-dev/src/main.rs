@@ -602,7 +602,7 @@ fn show_about_dialog(parent: &adw::ApplicationWindow) {
         .application_name("Developer Mirrors")
         .application_icon("com.parchlinux.mirrorman.dev")
         .developer_name("Parch GNU/Linux Team")
-        .version("0.5.3")
+        .version(env!("CARGO_PKG_VERSION"))
         .comments("Developer package manager mirror manager for Parch Linux")
         .website("https://parchlinux.com")
         .license_type(gtk4::License::Gpl30)

@@ -1,7 +1,7 @@
 # Maintainer: Parch GNU/Linux Team
 
 pkgname=mirrorman
-pkgver=0.5.3
+pkgver=0.6.0
 pkgrel=1
 pkgdesc="Pacman mirror and repository manager for Parch Linux"
 arch=('x86_64')
@@ -22,7 +22,7 @@ optdepends=(
 makedepends=('cargo' 'git' 'gettext')
 install=mirrorman.install
 source=(
-  "git+https://github.com/parchlinux/mirrorman.git#tag=v0.5.3"
+  "git+https://github.com/parchlinux/mirrorman.git#tag=v0.6.0"
 )
 sha256sums=('SKIP')
 
