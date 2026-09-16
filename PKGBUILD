@@ -45,14 +45,23 @@ package() {
   install -Dm755 "target/release/mirrorman-cli" \
     "$pkgdir/usr/bin/mirrorman-cli"
 
+  install -Dm755 "target/release/mirrorman-dev" \
+    "$pkgdir/usr/bin/mirrorman-dev"
+
   install -Dm644 "assets/man/mirrorman-cli.1.gz" \
     "$pkgdir/usr/share/man/man1/mirrorman-cli.1.gz"
 
   install -Dm644 "assets/data/com.parchlinux.mirrorman.desktop" \
     "$pkgdir/usr/share/applications/com.parchlinux.mirrorman.desktop"
 
+  install -Dm644 "assets/data/com.parchlinux.mirrorman.dev.desktop" \
+    "$pkgdir/usr/share/applications/com.parchlinux.mirrorman.dev.desktop"
+
   install -Dm644 "assets/data/com.parchlinux.mirrorman.svg" \
     "$pkgdir/usr/share/icons/hicolor/scalable/apps/com.parchlinux.mirrorman.svg"
+
+  install -Dm644 "assets/data/com.parchlinux.mirrorman.dev.svg" \
+    "$pkgdir/usr/share/icons/hicolor/scalable/apps/com.parchlinux.mirrorman.dev.svg"
 
   install -Dm644 "assets/data/com.parchlinux.mirrorman.policy" \
     "$pkgdir/usr/share/polkit-1/actions/com.parchlinux.mirrorman.policy"

@@ -4,6 +4,7 @@ members = [
     "crates/mirrorman-cli",
     "crates/mirrorman",
     "crates/mirrorman-helper",
+    "crates/mirrorman-dev",
 ]
 resolver = "2"
 

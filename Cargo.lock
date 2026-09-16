@@ -1413,7 +1413,19 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+ "toml",
  "zbus",
+]
+
+[[package]]
+name = "mirrorman-dev"
+version = "0.5.3"
+dependencies = [
+ "async-channel",
+ "glib",
+ "gtk4",
+ "libadwaita",
+ "mirrorman-core",
 ]
 
 [[package]]

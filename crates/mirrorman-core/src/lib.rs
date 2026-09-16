@@ -1,3 +1,4 @@
+pub mod dev;
 pub mod helper_client;
 pub mod helper_guard;
 pub mod i18n;
