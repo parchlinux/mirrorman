@@ -1,7 +1,7 @@
 # Maintainer: Parch GNU/Linux Team
 
 pkgname=mirrorman
-pkgver=0.5.3
+pkgver=0.6.0
 pkgrel=1
 pkgdesc="Pacman mirror and repository manager for Parch Linux"
 arch=('x86_64')
@@ -22,7 +22,7 @@ optdepends=(
 makedepends=('cargo' 'git' 'gettext')
 install=mirrorman.install
 source=(
-  "git+https://github.com/parchlinux/mirrorman.git#tag=v0.5.3"
+  "git+https://github.com/parchlinux/mirrorman.git#tag=v0.6.0"
 )
 sha256sums=('SKIP')
 
@@ -45,14 +45,23 @@ package() {
   install -Dm755 "target/release/mirrorman-cli" \
     "$pkgdir/usr/bin/mirrorman-cli"
 
+  install -Dm755 "target/release/mirrorman-dev" \
+    "$pkgdir/usr/bin/mirrorman-dev"
+
   install -Dm644 "assets/man/mirrorman-cli.1.gz" \
     "$pkgdir/usr/share/man/man1/mirrorman-cli.1.gz"
 
   install -Dm644 "assets/data/com.parchlinux.mirrorman.desktop" \
     "$pkgdir/usr/share/applications/com.parchlinux.mirrorman.desktop"
 
+  install -Dm644 "assets/data/com.parchlinux.mirrorman.dev.desktop" \
+    "$pkgdir/usr/share/applications/com.parchlinux.mirrorman.dev.desktop"
+
   install -Dm644 "assets/data/com.parchlinux.mirrorman.svg" \
     "$pkgdir/usr/share/icons/hicolor/scalable/apps/com.parchlinux.mirrorman.svg"
+
+  install -Dm644 "assets/data/com.parchlinux.mirrorman.dev.svg" \
+    "$pkgdir/usr/share/icons/hicolor/scalable/apps/com.parchlinux.mirrorman.dev.svg"
 
   install -Dm644 "assets/data/com.parchlinux.mirrorman.policy" \
     "$pkgdir/usr/share/polkit-1/actions/com.parchlinux.mirrorman.policy"

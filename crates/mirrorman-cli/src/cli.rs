@@ -108,6 +108,61 @@ pub enum Command {
         #[arg(long, short = 'o')]
         output: Option<PathBuf>,
     },
+    /// Manage developer CLI package managers (pip, npm, cargo, go, gem, composer)
+    Dev {
+        #[command(subcommand)]
+        subcommand: DevCommand,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum DevCommand {
+    /// Scan detected developer package managers and show current mirror
+    Scan {
+        /// Print as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// List candidate mirrors for an ecosystem
+    List {
+        /// The package manager (pip, npm, cargo, go, gem, composer)
+        ecosystem: String,
+        /// Print as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Test response latency of candidate mirrors
+    Test {
+        /// The package manager (pip, npm, cargo, go, gem, composer)
+        ecosystem: String,
+        /// Number of concurrent workers
+        #[arg(long, default_value_t = 10)]
+        workers: usize,
+        /// Print as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Set the active mirror for a package manager
+    Set {
+        /// The package manager (pip, npm, cargo, go, gem, composer)
+        ecosystem: String,
+        /// Mirror name or URL
+        mirror: String,
+    },
+    /// Reset package manager to official upstream default
+    Reset {
+        /// The package manager (pip, npm, cargo, go, gem, composer)
+        ecosystem: String,
+    },
+    /// Auto-select and configure the fastest responsive mirror for all installed tools
+    Auto {
+        /// Number of concurrent workers per ecosystem
+        #[arg(long, default_value_t = 10)]
+        workers: usize,
+        /// Print as JSON
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Serialize, Deserialize)]
@@ -455,6 +510,144 @@ pub fn execute(cli: Cli) -> Result<(), String> {
             }
             Ok(())
         }
+        Command::Dev { subcommand } => execute_dev(subcommand),
+    }
+}
+
+pub fn execute_dev(cmd: DevCommand) -> Result<(), String> {
+    match cmd {
+        DevCommand::Scan { json } => {
+            let statuses = mirrorman_core::dev::scan_ecosystems();
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&statuses).unwrap_or_default()
+                );
+            } else {
+                println!(
+                    "{:<18} {:<12} {:<45} {:<30}",
+                    "Ecosystem", "Installed", "Current Mirror", "Config Path"
+                );
+                println!("{}", "-".repeat(105));
+                for s in statuses {
+                    let installed_str = if s.is_installed { "Yes" } else { "No" };
+                    let mirror_str = s.current_mirror.as_deref().unwrap_or("-");
+                    let config_str = s.config_path.as_deref().unwrap_or("-");
+                    println!(
+                        "{:<18} {:<12} {:<45} {:<30}",
+                        s.name, installed_str, mirror_str, config_str
+                    );
+                }
+            }
+            Ok(())
+        }
+        DevCommand::List { ecosystem, json } => {
+            let kind = mirrorman_core::dev::DevEcosystemKind::parse(&ecosystem)
+                .ok_or_else(|| format!("Unknown ecosystem '{ecosystem}'. Available: pip, npm, cargo, go, gem, composer"))?;
+            let mirrors = mirrorman_core::dev::mirrors::get_mirrors_for_ecosystem(kind);
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&mirrors).unwrap_or_default()
+                );
+            } else {
+                println!("Available mirrors for {}:", kind.display_name());
+                println!("{:<25} {:<8} {:<10} {:<50}", "Name", "Country", "Type", "URL");
+                println!("{}", "-".repeat(95));
+                for m in mirrors {
+                    let type_str = if m.official { "Official" } else { "Mirror" };
+                    println!(
+                        "{:<25} {:<8} {:<10} {:<50}",
+                        m.name, m.country_code, type_str, m.url
+                    );
+                }
+            }
+            Ok(())
+        }
+        DevCommand::Test { ecosystem, workers, json } => {
+            let kind = mirrorman_core::dev::DevEcosystemKind::parse(&ecosystem)
+                .ok_or_else(|| format!("Unknown ecosystem '{ecosystem}'. Available: pip, npm, cargo, go, gem, composer"))?;
+            println!("[*] Benchmarking mirrors for {}...", kind.display_name());
+            let tested = mirrorman_core::dev::test_ecosystem_mirrors(kind, workers);
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&tested).unwrap_or_default()
+                );
+            } else {
+                println!(
+                    "{:<25} {:<8} {:<14} {:<50}",
+                    "Name", "Country", "Latency", "URL"
+                );
+                println!("{}", "-".repeat(97));
+                for m in tested {
+                    let latency_str = match m.speed {
+                        Some(ms) => format!("{:.1} ms", ms),
+                        None => "Failed/Timeout".to_string(),
+                    };
+                    println!(
+                        "{:<25} {:<8} {:<14} {:<50}",
+                        m.name, m.country_code, latency_str, m.url
+                    );
+                }
+            }
+            Ok(())
+        }
+        DevCommand::Set { ecosystem, mirror } => {
+            let kind = mirrorman_core::dev::DevEcosystemKind::parse(&ecosystem)
+                .ok_or_else(|| format!("Unknown ecosystem '{ecosystem}'. Available: pip, npm, cargo, go, gem, composer"))?;
+            let applied = mirrorman_core::dev::set_ecosystem_mirror(kind, &mirror)?;
+            println!(
+                "[+] Successfully updated {} mirror to '{}' ({})",
+                kind.display_name(),
+                applied.name,
+                applied.url
+            );
+            Ok(())
+        }
+        DevCommand::Reset { ecosystem } => {
+            let kind = mirrorman_core::dev::DevEcosystemKind::parse(&ecosystem)
+                .ok_or_else(|| format!("Unknown ecosystem '{ecosystem}'. Available: pip, npm, cargo, go, gem, composer"))?;
+            mirrorman_core::dev::reset_ecosystem_mirror(kind)?;
+            println!("[+] Successfully reset {} mirror to official upstream default.", kind.display_name());
+            Ok(())
+        }
+        DevCommand::Auto { workers, json } => {
+            println!("[*] Scanning installed tools and selecting lowest-latency mirrors...");
+            let results = mirrorman_core::dev::auto_select_fastest(workers);
+            if json {
+                let serialized: Vec<serde_json::Value> = results
+                    .iter()
+                    .map(|(kind, res)| {
+                        serde_json::json!({
+                            "ecosystem": kind.as_str(),
+                            "success": res.is_ok(),
+                            "mirror": res.as_ref().ok()
+                        })
+                    })
+                    .collect();
+                println!("{}", serde_json::to_string_pretty(&serialized).unwrap_or_default());
+            } else {
+                for (kind, res) in results {
+                    match res {
+                        Ok(mirror) => {
+                            let speed_str = mirror.speed.map(|s| format!("{:.1} ms", s)).unwrap_or_else(|| "-".to_string());
+                            println!(
+                                "[+] {}: set to '{}' ({}) [{}]",
+                                kind.display_name(),
+                                mirror.name,
+                                mirror.url,
+                                speed_str
+                            );
+                        }
+                        Err(e) => {
+                            eprintln!("[-] {}: failed ({e})", kind.display_name());
+                        }
+                    }
+                }
+            }
+            Ok(())
+        }
     }
 }
 
@@ -516,5 +709,23 @@ mod tests {
         mgr.mirrors = vec![sample_mirror(false)];
         let err = do_save(&mgr, false).unwrap_err();
         assert!(err.contains("No enabled mirrors"));
+    }
+
+    #[test]
+    fn test_dev_scan_succeeds() {
+        let res = execute_dev(DevCommand::Scan { json: false });
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn test_dev_list_pip_succeeds() {
+        let res = execute_dev(DevCommand::List { ecosystem: "pip".to_string(), json: false });
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn test_dev_list_unknown_fails() {
+        let res = execute_dev(DevCommand::List { ecosystem: "unknown_pkg_mgr".to_string(), json: false });
+        assert!(res.is_err());
     }
 }

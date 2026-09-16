@@ -74,7 +74,7 @@ struct ApiMirror {
 }
 
 const API_URL: &str = "https://archlinux.org/mirrors/status/json/";
-const USER_AGENT: &str = "mirrorman/0.5.3";
+const USER_AGENT: &str = "mirrorman/0.6.0";
 const MIRRORLIST_FILE: &str = "/etc/pacman.d/mirrorlist";
 pub const MIRRORLIST_BACKUP: &str = "/etc/pacman.d/mirrorlist.backup";
 

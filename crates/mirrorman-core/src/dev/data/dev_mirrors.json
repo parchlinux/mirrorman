@@ -1,0 +1,212 @@
+{
+  "pip": [
+    {
+      "name": "Official PyPI",
+      "url": "https://pypi.org/simple",
+      "country": "Global",
+      "country_code": "GL",
+      "official": true,
+      "ping_url": "https://pypi.org/simple/",
+      "trusted_host": null
+    },
+    {
+      "name": "Liara (Mirava)",
+      "url": "https://package-mirror.liara.ir/repository/pypi/simple",
+      "country": "Iran",
+      "country_code": "IR",
+      "official": false,
+      "ping_url": "https://package-mirror.liara.ir/repository/pypi/simple/",
+      "trusted_host": "package-mirror.liara.ir"
+    },
+    {
+      "name": "Runflare (Mirava)",
+      "url": "https://mirror-pypi.runflare.com/simple/",
+      "country": "Iran",
+      "country_code": "IR",
+      "official": false,
+      "ping_url": "https://mirror-pypi.runflare.com/simple/",
+      "trusted_host": "mirror-pypi.runflare.com"
+    },
+    {
+      "name": "Tsinghua TUNA",
+      "url": "https://pypi.tuna.tsinghua.edu.cn/simple",
+      "country": "China",
+      "country_code": "CN",
+      "official": false,
+      "ping_url": "https://pypi.tuna.tsinghua.edu.cn/simple/",
+      "trusted_host": "pypi.tuna.tsinghua.edu.cn"
+    },
+    {
+      "name": "USTC",
+      "url": "https://mirrors.ustc.edu.cn/pypi/simple",
+      "country": "China",
+      "country_code": "CN",
+      "official": false,
+      "ping_url": "https://mirrors.ustc.edu.cn/pypi/simple/",
+      "trusted_host": "mirrors.ustc.edu.cn"
+    }
+  ],
+  "npm": [
+    {
+      "name": "Official npmjs",
+      "url": "https://registry.npmjs.org/",
+      "country": "Global",
+      "country_code": "GL",
+      "official": true,
+      "ping_url": "https://registry.npmjs.org/",
+      "trusted_host": null
+    },
+    {
+      "name": "Liara (Mirava)",
+      "url": "https://package-mirror.liara.ir/repository/npm/",
+      "country": "Iran",
+      "country_code": "IR",
+      "official": false,
+      "ping_url": "https://package-mirror.liara.ir/repository/npm/",
+      "trusted_host": null
+    },
+    {
+      "name": "NpmMirror (Taobao)",
+      "url": "https://registry.npmmirror.com/",
+      "country": "China",
+      "country_code": "CN",
+      "official": false,
+      "ping_url": "https://registry.npmmirror.com/",
+      "trusted_host": null
+    },
+    {
+      "name": "Official Yarn",
+      "url": "https://registry.yarnpkg.com/",
+      "country": "Global",
+      "country_code": "GL",
+      "official": false,
+      "ping_url": "https://registry.yarnpkg.com/",
+      "trusted_host": null
+    }
+  ],
+  "cargo": [
+    {
+      "name": "Official crates.io (Sparse)",
+      "url": "sparse+https://index.crates.io/",
+      "country": "Global",
+      "country_code": "GL",
+      "official": true,
+      "ping_url": "https://index.crates.io/config.json",
+      "trusted_host": null
+    },
+    {
+      "name": "USTC Mirror",
+      "url": "sparse+https://mirrors.ustc.edu.cn/crates.io-index/",
+      "country": "China",
+      "country_code": "CN",
+      "official": false,
+      "ping_url": "https://mirrors.ustc.edu.cn/crates.io-index/config.json",
+      "trusted_host": null
+    },
+    {
+      "name": "Tsinghua TUNA",
+      "url": "sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/",
+      "country": "China",
+      "country_code": "CN",
+      "official": false,
+      "ping_url": "https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/config.json",
+      "trusted_host": null
+    },
+    {
+      "name": "SJTU Mirror",
+      "url": "sparse+https://mirrors.sjtug.sjtu.edu.cn/crates.io-index/",
+      "country": "China",
+      "country_code": "CN",
+      "official": false,
+      "ping_url": "https://mirrors.sjtug.sjtu.edu.cn/crates.io-index/config.json",
+      "trusted_host": null
+    }
+  ],
+  "go": [
+    {
+      "name": "Official Google Proxy",
+      "url": "https://proxy.golang.org,direct",
+      "country": "Global",
+      "country_code": "GL",
+      "official": true,
+      "ping_url": "https://proxy.golang.org/",
+      "trusted_host": null
+    },
+    {
+      "name": "Liara (Mirava)",
+      "url": "https://package-mirror.liara.ir/repository/go/,direct",
+      "country": "Iran",
+      "country_code": "IR",
+      "official": false,
+      "ping_url": "https://package-mirror.liara.ir/repository/go/",
+      "trusted_host": null
+    },
+    {
+      "name": "Goproxy.cn",
+      "url": "https://goproxy.cn,direct",
+      "country": "China",
+      "country_code": "CN",
+      "official": false,
+      "ping_url": "https://goproxy.cn/",
+      "trusted_host": null
+    },
+    {
+      "name": "Goproxy.io",
+      "url": "https://goproxy.io,direct",
+      "country": "Global",
+      "country_code": "GL",
+      "official": false,
+      "ping_url": "https://goproxy.io/",
+      "trusted_host": null
+    }
+  ],
+  "gem": [
+    {
+      "name": "Official RubyGems",
+      "url": "https://rubygems.org",
+      "country": "Global",
+      "country_code": "GL",
+      "official": true,
+      "ping_url": "https://rubygems.org",
+      "trusted_host": null
+    },
+    {
+      "name": "Ruby China",
+      "url": "https://gems.ruby-china.com",
+      "country": "China",
+      "country_code": "CN",
+      "official": false,
+      "ping_url": "https://gems.ruby-china.com",
+      "trusted_host": null
+    }
+  ],
+  "composer": [
+    {
+      "name": "Official Packagist",
+      "url": "https://repo.packagist.org",
+      "country": "Global",
+      "country_code": "GL",
+      "official": true,
+      "ping_url": "https://repo.packagist.org/packages.json",
+      "trusted_host": null
+    },
+    {
+      "name": "Liara (Mirava)",
+      "url": "https://package-mirror.liara.ir/repository/composer/",
+      "country": "Iran",
+      "country_code": "IR",
+      "official": false,
+      "ping_url": "https://package-mirror.liara.ir/repository/composer/",
+      "trusted_host": null
+    },
+    {
+      "name": "Aliyun Composer",
+      "url": "https://mirrors.aliyun.com/composer/",
+      "country": "China",
+      "country_code": "CN",
+      "official": false,
+      "ping_url": "https://mirrors.aliyun.com/composer/",
+      "trusted_host": null
+    }
+  ]
+}

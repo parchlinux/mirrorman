@@ -44,6 +44,17 @@
     <keyword>ranking</keyword>
   </keywords>
   <releases>
+    <release version="0.6.0" date="2026-09-16">
+      <description>
+        <p>Developer tools mirror management release:</p>
+        <ul>
+          <li>Added mirrorman-dev standalone GNOME HIG GUI for programmer package managers</li>
+          <li>Support for pip, npm, cargo, go, gem, and composer package managers</li>
+          <li>Integrated curated mirror sources from Mirava Organization and official registries</li>
+          <li>Added mirrorman-cli dev subcommands for CLI workflows and automation</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.5.3" date="2026-08-28">
       <description>
         <p>Performance and offline resilience release:</p>

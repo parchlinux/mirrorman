@@ -5,6 +5,21 @@ All notable changes to MirrorMan will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-09-16
+
+### Added
+- **Developer CLI Mirror Management (`mirrorman-dev`)**:
+  - Added standalone GTK4 / Libadwaita GUI application (`mirrorman-dev`) adhering to GNOME HIG.
+  - Added support for detecting and configuring mirrors for Python (`pip`), Node.js (`npm`), Rust (`cargo`), Go (`GOPROXY`), Ruby (`gem`), and PHP (`composer`).
+  - Integrated curated mirror registry data based on Mirava Organization and official global registries.
+  - Added multi-threaded concurrent latency/speed benchmark engine for candidate endpoints.
+  - Added `mirrorman-cli dev [scan|list|test|set|reset|auto]` subcommands for headless automation and terminal workflows.
+  - Added custom developer app SVG icon and desktop launcher.
+  - Added KDE Plasma (Breeze) icon compatibility for mirror speed test action button.
+
+### Changed
+- Bumped workspace version to 0.6.0 across all crates, PKGBUILD, man page, and metainfo.
+
 ## [0.5.3] - 2026-08-28
 
 ### Added

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Developer Mirrors
+GenericName=Package Manager Mirrors
+Comment=Manage package manager mirrors for developers (pip, npm, cargo, go, etc.)
+Categories=Development;PackageManager;GTK;
+Keywords=mirror;pip;npm;cargo;go;gem;composer;developer;python;node;rust;golang;
+Exec=mirrorman-dev
+Icon=com.parchlinux.mirrorman.dev
+Terminal=false
+StartupNotify=true
+X-GNOME-UsesNotifications=true
